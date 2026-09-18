@@ -597,6 +597,14 @@ function startCall({
         });
 
         callState.status = "ringing_customer";
+        // REAL FEATURE, per explicit request — captures when the
+        // customer leg actually started ringing, so "ring time" can
+        // be measured later (see ring_seconds, computed at whichever
+        // of this call's two end-paths actually runs — either the
+        // moment ConfbridgeJoin fires below for a real human answer,
+        // or at insert time for the automatic-outcome path, using
+        // this same timestamp either way).
+        callState.ringingCustomerAt = new Date();
         broadcastCallStatus(callState);
 
         // REAL BUG FIXED HERE: previously, callState.customerChannel was
@@ -820,6 +828,16 @@ function registerCallEventTracking() {
       if (call.status === "ringing_customer") {
         call.customerChannel = evt.channel;
         call.status = "customer_connected";
+        // REAL FEATURE, per explicit request — the real human-answer
+        // path's half of ring_seconds. Computed here, once, at the
+        // exact moment of answer (matching inboundCallService.js's
+        // own waitSeconds pattern for the same reasoning) — the
+        // automatic-outcome path below computes it the other way,
+        // from ringingCustomerAt straight to call-end, since
+        // customer_connected never fires there.
+        if (call.ringingCustomerAt) {
+          call.ringSeconds = Math.floor((new Date() - call.ringingCustomerAt) / 1000);
+        }
         broadcastCallStatus(call);
 
         // UPDATED — was hardcoded to `call.campaignId === "CMXBSMSC"`
@@ -1067,6 +1085,14 @@ async function handleAutomaticDialOutcome(room, outcomeType) {
   }
 
   const endedAt = new Date();
+  // REAL FEATURE, per explicit request — the automatic-outcome path's
+  // half of ring_seconds. customer_connected never fires here (that's
+  // specifically the real-human-answer path), so this computes it the
+  // other way: straight from when the customer leg started ringing to
+  // right now, when this automatic outcome (no answer, busy, AMD
+  // machine detection) was reached. NULL if the customer leg somehow
+  // never even started ringing at all (e.g. failed before that point).
+  const ringSeconds = call.ringingCustomerAt ? Math.floor((endedAt - call.ringingCustomerAt) / 1000) : null;
 
   try {
     await db.execute(
@@ -1074,13 +1100,13 @@ async function handleAutomaticDialOutcome(room, outcomeType) {
         INSERT INTO cmx_dialer.dialer_call_log
           (agent_user, campaign_id, lead_id, phone_number, first_name, last_name,
            room_number, call_id, call_type, call_started_at, call_ended_at, disposition,
-           comments, callback_at, xfer_conf, xfer_conf_target)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'N', NULL)
+           comments, callback_at, xfer_conf, xfer_conf_target, ring_seconds)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'N', NULL, ?)
       `,
       [
         call.agentUser, call.campaignId, call.leadId, call.phoneNumber, call.lead?.first_name || null, call.lead?.last_name || null,
         room, call.callId, call.callType || "REGULAR", call.startedAt, endedAt, info.disposition,
-        `Automatically detected — ${outcomeType.replace("_", " ")}. No agent interaction occurred.`, null,
+        `Automatically detected — ${outcomeType.replace("_", " ")}. No agent interaction occurred.`, null, ringSeconds,
       ]
     );
 
@@ -1308,6 +1334,16 @@ async function saveDisposition({
   const startedAt = call ? call.startedAt : new Date();
   const endedAt = (call && call.endedAt) || new Date();
   const callType = (call && call.callType) || "REGULAR";
+  // REAL FEATURE, per explicit request — prefers the value already
+  // computed at the exact moment of answer (see customer_connected's
+  // own comment above) since that's the most accurate; falls back to
+  // computing it here, ringingCustomerAt-to-endedAt, for the rarer
+  // case of an agent manually ending/dispositioning a call that was
+  // still ringing when they did — same fallback the automatic-outcome
+  // path above uses for its own always-never-connected case.
+  const ringSeconds = call
+    ? call.ringSeconds ?? (call.ringingCustomerAt ? Math.floor((endedAt - call.ringingCustomerAt) / 1000) : null)
+    : null;
 
   const connection = await db.getConnection();
   try {
@@ -1318,13 +1354,13 @@ async function saveDisposition({
         INSERT INTO cmx_dialer.dialer_call_log
           (agent_user, campaign_id, lead_id, phone_number, first_name, last_name,
            room_number, call_id, call_type, call_started_at, call_ended_at, disposition,
-           comments, callback_at, xfer_conf, xfer_conf_target)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           comments, callback_at, xfer_conf, xfer_conf_target, ring_seconds)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         agentUser, campaignId, leadId, phoneNumber, firstName || null, lastName || null,
         room, callId, callType, startedAt, endedAt, disposition, comments.trim(), callbackAt || null,
-        call && call.xferConfTarget ? "Y" : "N", (call && call.xferConfTarget) || null,
+        call && call.xferConfTarget ? "Y" : "N", (call && call.xferConfTarget) || null, ringSeconds,
       ]
     );
 

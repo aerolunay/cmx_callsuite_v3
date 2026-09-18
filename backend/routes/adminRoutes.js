@@ -1873,12 +1873,13 @@ router.get(
           combined.call_started_at,
           combined.direction,
           combined.wait_seconds,
+          combined.ring_seconds,
           agg.handle_time_seconds,
           au.full_name AS agent_name,
           combined.agent_user
         FROM (
           (
-            SELECT campaign_id, phone_number, call_id, call_started_at, agent_user, 'outbound' AS direction, NULL AS wait_seconds
+            SELECT campaign_id, phone_number, call_id, call_started_at, agent_user, 'outbound' AS direction, NULL AS wait_seconds, ring_seconds
             FROM cmx_dialer.dialer_call_log
             WHERE call_started_at >= ? AND call_started_at <= ?
             ${outboundCampaignFilter}
@@ -1887,7 +1888,7 @@ router.get(
           )
           UNION ALL
           (
-            SELECT campaign_id, caller_id_number AS phone_number, call_id, call_started_at, agent_user, 'inbound' AS direction, wait_seconds
+            SELECT campaign_id, caller_id_number AS phone_number, call_id, call_started_at, agent_user, 'inbound' AS direction, wait_seconds, NULL AS ring_seconds
             FROM cmx_dialer.inbound_call_log
             WHERE call_started_at >= ? AND call_started_at <= ?
             ${inboundCampaignFilter}
@@ -1919,6 +1920,12 @@ router.get(
       // disposition time (see inboundCallService.js), just wasn't
       // being selected here until now.
       waitSeconds: r.wait_seconds,
+      // Only meaningful for outbound (NULL for inbound, per the union
+      // above) — how long the customer's phone was actually ringing
+      // before either a real human answered or an automatic outcome
+      // (no answer, busy, AMD) was reached. See dialerService.js for
+      // where this actually gets computed and persisted.
+      ringSeconds: r.ring_seconds,
       handleTimeSeconds: r.handle_time_seconds,
       // Falls back to the raw vicidial_user if the app_users join
       // doesn't resolve (e.g. an agent account since deleted) — same

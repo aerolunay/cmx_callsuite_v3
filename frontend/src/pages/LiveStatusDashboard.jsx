@@ -753,13 +753,14 @@ export default function LiveStatusDashboard() {
                       <th>Caller ID</th>
                       <th>Agent</th>
                       <th>Call DateTime</th>
+                      <th>Ring Time</th>
                       <th>Handle Time</th>
                     </tr>
                   </thead>
                   <tbody>
                     {outboundCallsList.length === 0 ? (
                       <tr>
-                        <td colSpan={5} style={{ color: "#888" }}>
+                        <td colSpan={6} style={{ color: "#888" }}>
                           No outbound calls today.
                         </td>
                       </tr>
@@ -770,6 +771,7 @@ export default function LiveStatusDashboard() {
                           <td>{c.phoneNumber || "—"}</td>
                           <td>{c.agentName || "—"}</td>
                           <td>{formatDate(c.callStartedAt)}</td>
+                          <td>{formatDurationHMS(c.ringSeconds)}</td>
                           <td>{formatDurationHMS(c.handleTimeSeconds)}</td>
                         </tr>
                       ))
