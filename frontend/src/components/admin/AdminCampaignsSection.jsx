@@ -1023,8 +1023,9 @@ export default function AdminCampaignsSection() {
                     {translationEnabled && (
                       <div style={{ marginTop: 8, padding: 10, border: "1px solid #d9dee6", borderRadius: 8 }}>
                         <p style={{ fontSize: 13, color: "#888", marginTop: 0 }}>
-                          Played right after the welcome greeting during business hours. No key or an invalid key replays
-                          the menu once, then connects in English.
+                          Business hours only. Call flow: <strong>Language menu</strong> → Welcome Greeting → queue / hold →
+                          voicemail option (if enabled). No key or an invalid key replays the menu once, then continues in
+                          English. After hours is unchanged (no language menu).
                         </p>
 
                         <div style={{ overflowX: "auto" }}>
@@ -1122,12 +1123,13 @@ export default function AdminCampaignsSection() {
                         </button>
 
                         <label className="comments-label" style={{ marginTop: 12 }}>
-                          Language Menu Prompt{" "}
+                          Language Selection IVR Prompt (separate from the Welcome Greeting){" "}
                           {editingCampaignId && hasLanguageMenuAudio ? "(leave blank to keep current)" : "(required)"}
                         </label>
                         <input type="file" accept="audio/*" onChange={(e) => setLanguageMenuAudioFile(e.target.files?.[0] || null)} />
                         <p style={{ fontSize: 13, color: "#888", marginTop: 4 }}>
-                          One recording that lists every option above, e.g. "For English press 1. Para español oprima 2. …".
+                          Played first, before the Welcome Greeting. One recording that lists every option above, e.g. "For
+                          English press 1. Para español oprima 2. …".
                           Transfer numbers that are one of our own DIDs route straight into that campaign.
                         </p>
                       </div>

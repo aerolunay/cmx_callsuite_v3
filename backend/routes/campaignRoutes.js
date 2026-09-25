@@ -19,8 +19,9 @@ const router = express.Router();
 IVR LANGUAGE MENU ("Require Translation")
 ==================================================
 Per-campaign, BLENDED campaigns only, business hours only. When enabled,
-the caller hears the uploaded language-menu prompt right after the
-welcome greeting and presses a key (1-9). Each option routes one of
+the caller hears the uploaded language-menu prompt FIRST (before the
+welcome greeting) and presses a key (1-9); the welcome greeting, queue
+and voicemail option then follow as usual. Each option routes one of
 three ways:
   agents   -> the campaign's normal inbound flow (queue/agents)
   transfer -> dialled out through the campaign's outbound trunk to a
@@ -502,13 +503,17 @@ function buildCampaignDialplanBlock({
     `exten => ${did},n(${openLabel}),Answer()`,
   ];
 
-  if (greetingSound) {
+  // IVR LANGUAGE MENU — see TRANSLATION_LANGUAGES at the top of this file.
+  // Order when enabled:  language menu -> welcome greeting -> queue/hold -> voicemail option.
+  // Order when disabled: welcome greeting -> queue/hold -> voicemail option (unchanged).
+  // After hours never plays the language menu.
+  const languageOptions = translationEnabled === "Y" ? storedTranslationLanguages(translationLanguages) : [];
+  const routeLabel = `${did}_route`;
+
+  if (greetingSound && !languageOptions.length) {
     lines.push(`exten => ${did},n,Playback(${greetingSound})`);
   }
 
-  // IVR LANGUAGE MENU — see TRANSLATION_LANGUAGES at the top of this file.
-  const languageOptions = translationEnabled === "Y" ? storedTranslationLanguages(translationLanguages) : [];
-  const routeLabel = `${did}_route`;
   if (languageOptions.length) {
     const menuLabel = `${did}_lang_menu`;
     const menuSound = languageMenuAudioFilename
@@ -558,8 +563,16 @@ function buildCampaignDialplanBlock({
   const roomQuery = languageOptions.length
     ? `&did=${did}&lang=\${CMXLANG}&interpreter=\${CMXINTERPRETER}`
     : `&did=${did}`;
+  if (languageOptions.length) {
+    // Every non-transfer language option lands here: greeting first, then the queue.
+    lines.push(
+      greetingSound
+        ? `exten => ${did},n(${routeLabel}),Playback(${greetingSound})`
+        : `exten => ${did},n(${routeLabel}),NoOp(CMX Campaign ${campaignId}: language \${CMXLANG})`
+    );
+  }
   lines.push(
-    `exten => ${did},n${languageOptions.length ? `(${routeLabel})` : ""},Set(ROOM=\${CURL(${INTERNAL_API_BASE_URL}/internal/allocate-inbound-room?secret=${INTERNAL_API_SECRET}${roomQuery})})`,
+    `exten => ${did},n,Set(ROOM=\${CURL(${INTERNAL_API_BASE_URL}/internal/allocate-inbound-room?secret=${INTERNAL_API_SECRET}${roomQuery})})`,
     `exten => ${did},n,GotoIf($["\${ROOM}" = ""]?${noRoomLabel})`
   );
 
