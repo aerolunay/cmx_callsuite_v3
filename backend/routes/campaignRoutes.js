@@ -563,6 +563,13 @@ function buildCampaignDialplanBlock({
         lines.push(
           `exten => ${did},n(${label}),NoOp(CMX Campaign ${campaignId} IVR ${option.key}: ${option.language} -> transfer ${option.transferNumber})`,
           `exten => ${did},n,Set(CMXLANG=${option.language})`,
+          // Carriers (QuestBlue) reject a forwarded call whose caller ID isn't a
+          // number on the account (403 Forbidden, anti-spoofing / STIR-SHAKEN).
+          // Send the campaign's own DID as the number, and the customer's number
+          // as the caller NAME so the receiving team can still see who's calling.
+          `exten => ${did},n,Set(CMXORIGCID=\${CALLERID(num)})`,
+          `exten => ${did},n,Set(CALLERID(name)=\${CMXORIGCID})`,
+          `exten => ${did},n,Set(CALLERID(num)=${did})`,
           `exten => ${did},n,Set(__SKIP_AMD=1)`,
           `exten => ${did},n,Set(__CMXTRUNK=${outboundTrunk || "CMXCallSuite"})`,
           `exten => ${did},n,Dial(Local/${option.transferNumber}@trunkinbound,60)`,
