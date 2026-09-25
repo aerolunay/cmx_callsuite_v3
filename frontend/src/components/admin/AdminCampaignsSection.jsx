@@ -433,6 +433,7 @@ export default function AdminCampaignsSection() {
   const [translationRows, setTranslationRows] = useState(() => DEFAULT_TRANSLATION_ROWS.map((r) => ({ ...r })));
   const [languageMenuAudioFile, setLanguageMenuAudioFile] = useState(null);
   const [hasLanguageMenuAudio, setHasLanguageMenuAudio] = useState(false);
+  const [languageInvalidOptionAudioFile, setLanguageInvalidOptionAudioFile] = useState(null);
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -490,6 +491,7 @@ export default function AdminCampaignsSection() {
     setTranslationRows(DEFAULT_TRANSLATION_ROWS.map((r) => ({ ...r })));
     setLanguageMenuAudioFile(null);
     setHasLanguageMenuAudio(false);
+    setLanguageInvalidOptionAudioFile(null);
     setError("");
     setSuccess("");
   }
@@ -536,6 +538,7 @@ export default function AdminCampaignsSection() {
     setTranslationRows(parseTranslationRows(c.translation_languages));
     setLanguageMenuAudioFile(null);
     setHasLanguageMenuAudio(Boolean(c.language_menu_audio_filename));
+    setLanguageInvalidOptionAudioFile(null);
     setError("");
     setSuccess("");
   }
@@ -683,6 +686,7 @@ export default function AdminCampaignsSection() {
       )
     );
     if (translationOn && languageMenuAudioFile) formData.append("languageMenuAudio", languageMenuAudioFile);
+    if (translationOn && languageInvalidOptionAudioFile) formData.append("languageInvalidOptionAudio", languageInvalidOptionAudioFile);
     return formData;
   }
 
@@ -1024,8 +1028,8 @@ export default function AdminCampaignsSection() {
                       <div style={{ marginTop: 8, padding: 10, border: "1px solid #d9dee6", borderRadius: 8 }}>
                         <p style={{ fontSize: 13, color: "#888", marginTop: 0 }}>
                           Business hours only. Call flow: <strong>Language menu</strong> → Welcome Greeting → queue / hold →
-                          voicemail option (if enabled). No key or an invalid key replays the menu once, then continues in
-                          English. After hours is unchanged (no language menu).
+                          voicemail option (if enabled). <strong>0</strong> replays the options. No key or an invalid key
+                          replays the menu once, then continues in English. After hours is unchanged (no language menu).
                         </p>
 
                         <div style={{ overflowX: "auto" }}>
@@ -1129,8 +1133,21 @@ export default function AdminCampaignsSection() {
                         <input type="file" accept="audio/*" onChange={(e) => setLanguageMenuAudioFile(e.target.files?.[0] || null)} />
                         <p style={{ fontSize: 13, color: "#888", marginTop: 4 }}>
                           Played first, before the Welcome Greeting. One recording that lists every option above, e.g. "For
-                          English press 1. Para español oprima 2. …".
+                          English press 1. Para español oprima 2. … To hear these options again, press 0."
                           Transfer numbers that are one of our own DIDs route straight into that campaign.
+                        </p>
+
+                        <label className="comments-label" style={{ marginTop: 12 }}>
+                          Language Invalid Option Prompt {editingCampaignId && "(leave blank to keep current)"}
+                        </label>
+                        <input
+                          type="file"
+                          accept="audio/*"
+                          onChange={(e) => setLanguageInvalidOptionAudioFile(e.target.files?.[0] || null)}
+                        />
+                        <p style={{ fontSize: 13, color: "#888", marginTop: 4 }}>
+                          Played when the caller presses a key that isn't in the menu, before the options repeat, e.g. "Sorry,
+                          that's not a valid option." Separate from the voicemail invalid-option prompt. Optional.
                         </p>
                       </div>
                     )}

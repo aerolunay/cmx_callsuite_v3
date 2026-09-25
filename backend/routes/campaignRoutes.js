@@ -30,7 +30,9 @@ three ways:
   ai       -> the normal inbound flow, tagged with the caller's language
               (lang=...&interpreter=1 on allocate-inbound-room) so the
               AI interpreter service can join the call
-No key / invalid key -> menu replayed once, then English (normal flow).
+0 -> the menu again (doesn't count as a miss; capped at 5 repeats).
+Invalid key -> the language invalid-option prompt (if uploaded), then the
+menu again; no key -> the menu again. After a second miss, English.
 Unchecked -> nothing changes at all: the dialplan is exactly as before.
 ==================================================
 */
@@ -410,6 +412,7 @@ function buildCampaignDialplanBlock({
   translationEnabled,
   translationLanguages,
   languageMenuAudioFilename,
+  languageInvalidOptionAudioFilename,
   outboundTrunk,
 }) {
   // Per explicit request, confirmed as a real gap via a live test
@@ -519,21 +522,34 @@ function buildCampaignDialplanBlock({
     const menuSound = languageMenuAudioFilename
       ? `custom/${path.basename(languageMenuAudioFilename, path.extname(languageMenuAudioFilename))}`
       : "";
+    const languageInvalidSound = languageInvalidOptionAudioFilename
+      ? `custom/${path.basename(languageInvalidOptionAudioFilename, path.extname(languageInvalidOptionAudioFilename))}`
+      : "";
     lines.push(
       `exten => ${did},n,Set(CMXLANG=en)`,
       `exten => ${did},n,Set(CMXLANGTRIES=0)`,
+      `exten => ${did},n,Set(CMXLANGREPEATS=0)`,
       `exten => ${did},n(${menuLabel}),Read(CMXLANGKEY,${menuSound},1,,,6)`
     );
     for (const option of languageOptions) {
       lines.push(`exten => ${did},n,GotoIf($["\${CMXLANGKEY}" = "${option.key}"]?${did}_lang_${option.key})`);
     }
-    lines.push(`exten => ${did},n,Set(CMXLANGTRIES=$[\${CMXLANGTRIES} + 1])`);
-    if (voicemailInvalidOptionSound) {
-      lines.push(`exten => ${did},n,ExecIf($["\${CMXLANGKEY}" != ""]?Playback(${voicemailInvalidOptionSound}))`);
+    lines.push(
+      // 0 = hear the options again. Doesn't count as a miss; capped so a
+      // stuck key can't loop forever (then continues in English).
+      `exten => ${did},n,GotoIf($["\${CMXLANGKEY}" = "0"]?${did}_lang_repeat)`,
+      `exten => ${did},n,Set(CMXLANGTRIES=$[\${CMXLANGTRIES} + 1])`
+    );
+    if (languageInvalidSound) {
+      // Only for a real wrong key — silence (no key) just replays the menu.
+      lines.push(`exten => ${did},n,ExecIf($["\${CMXLANGKEY}" != ""]?Playback(${languageInvalidSound}))`);
     }
     lines.push(
-      // One replay, then default to English / the normal flow.
+      // One replay after a miss, then default to English / the normal flow.
       `exten => ${did},n,GotoIf($[\${CMXLANGTRIES} < 2]?${menuLabel})`,
+      `exten => ${did},n,Goto(${routeLabel})`,
+      `exten => ${did},n(${did}_lang_repeat),Set(CMXLANGREPEATS=$[\${CMXLANGREPEATS} + 1])`,
+      `exten => ${did},n,GotoIf($[\${CMXLANGREPEATS} <= 5]?${menuLabel})`,
       `exten => ${did},n,Goto(${routeLabel})`
     );
 
@@ -755,6 +771,7 @@ async function regenerateCampaignDialplanFile() {
         s.translation_enabled AS translationEnabled,
         s.translation_languages AS translationLanguages,
         s.language_menu_audio_filename AS languageMenuAudioFilename,
+        s.language_invalid_option_audio_filename AS languageInvalidOptionAudioFilename,
         s.outbound_trunk AS outboundTrunk
       FROM asterisk.vicidial_inbound_dids d
       JOIN cmx_dialer.campaign_settings s ON s.campaign_id = d.campaign_id
@@ -822,7 +839,8 @@ router.get("/", requireAdmin, async (req, res) => {
           s.business_hours_start, s.business_hours_end, s.business_days, s.blended_fallback_campaign_id,
           s.voicemail_business_hours_enabled, s.voicemail_afterhours_enabled, s.voicemail_prompt_audio_filename, s.afterhours_voicemail_prompt_audio_filename,
           s.voicemail_invalid_option_audio_filename, s.voicemail_wait_seconds, s.outbound_trunk,
-          s.translation_enabled, s.translation_languages, s.language_menu_audio_filename
+          s.translation_enabled, s.translation_languages, s.language_menu_audio_filename,
+          s.language_invalid_option_audio_filename
         FROM asterisk.vicidial_campaigns c
         LEFT JOIN asterisk.vicidial_inbound_dids d ON d.campaign_id = c.campaign_id
         LEFT JOIN cmx_dialer.campaign_settings s ON s.campaign_id = c.campaign_id
@@ -866,6 +884,7 @@ router.post(
     { name: "afterhoursVoicemailPromptAudio", maxCount: 1 },
     { name: "voicemailInvalidOptionAudio", maxCount: 1 },
     { name: "languageMenuAudio", maxCount: 1 },
+    { name: "languageInvalidOptionAudio", maxCount: 1 },
   ]),
   async (req, res) => {
     const {
@@ -995,6 +1014,7 @@ router.post(
       const afterhoursVoicemailPromptFile = req.files?.afterhoursVoicemailPromptAudio?.[0];
       const voicemailInvalidOptionFile = req.files?.voicemailInvalidOptionAudio?.[0];
       const languageMenuFile = req.files?.languageMenuAudio?.[0];
+      const languageInvalidOptionFile = req.files?.languageInvalidOptionAudio?.[0];
 
       await db.execute(
         `UPDATE cmx_dialer.campaign_settings SET translation_enabled = ?, translation_languages = ? WHERE campaign_id = ?`,
@@ -1004,6 +1024,17 @@ router.post(
         const languageMenuAudioFilename = await processUploadedAudio(languageMenuFile, campaignId, "language-menu");
         await db.execute(`UPDATE cmx_dialer.campaign_settings SET language_menu_audio_filename = ? WHERE campaign_id = ?`, [
           languageMenuAudioFilename,
+          campaignId,
+        ]);
+      }
+      if (languageInvalidOptionFile) {
+        const languageInvalidOptionAudioFilename = await processUploadedAudio(
+          languageInvalidOptionFile,
+          campaignId,
+          "language-invalid-option"
+        );
+        await db.execute(`UPDATE cmx_dialer.campaign_settings SET language_invalid_option_audio_filename = ? WHERE campaign_id = ?`, [
+          languageInvalidOptionAudioFilename,
           campaignId,
         ]);
       }
@@ -1083,6 +1114,7 @@ router.put(
     { name: "afterhoursVoicemailPromptAudio", maxCount: 1 },
     { name: "voicemailInvalidOptionAudio", maxCount: 1 },
     { name: "languageMenuAudio", maxCount: 1 },
+    { name: "languageInvalidOptionAudio", maxCount: 1 },
   ]),
   async (req, res) => {
     const { campaignId } = req.params;
@@ -1220,6 +1252,7 @@ router.put(
       const afterhoursVoicemailPromptFile = req.files?.afterhoursVoicemailPromptAudio?.[0];
       const voicemailInvalidOptionFile = req.files?.voicemailInvalidOptionAudio?.[0];
       const languageMenuFile = req.files?.languageMenuAudio?.[0];
+      const languageInvalidOptionFile = req.files?.languageInvalidOptionAudio?.[0];
 
       await db.execute(
         `UPDATE cmx_dialer.campaign_settings SET translation_enabled = ?, translation_languages = ? WHERE campaign_id = ?`,
@@ -1229,6 +1262,17 @@ router.put(
         const languageMenuAudioFilename = await processUploadedAudio(languageMenuFile, campaignId, "language-menu");
         await db.execute(`UPDATE cmx_dialer.campaign_settings SET language_menu_audio_filename = ? WHERE campaign_id = ?`, [
           languageMenuAudioFilename,
+          campaignId,
+        ]);
+      }
+      if (languageInvalidOptionFile) {
+        const languageInvalidOptionAudioFilename = await processUploadedAudio(
+          languageInvalidOptionFile,
+          campaignId,
+          "language-invalid-option"
+        );
+        await db.execute(`UPDATE cmx_dialer.campaign_settings SET language_invalid_option_audio_filename = ? WHERE campaign_id = ?`, [
+          languageInvalidOptionAudioFilename,
           campaignId,
         ]);
       }
