@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import Header from "../components/Header";
 import Setup2FAModal from "../modals/Setup2FAModal";
+import AgentDashboard from "../components/AgentDashboard";
 import { useAuth } from "../context/AuthContext";
 
 export default function LandingPage() {
@@ -10,61 +11,28 @@ export default function LandingPage() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // This Welcome/2FA-setup content should only show right after a
-  // GENUINE fresh login — LoginPage.jsx tags that specific navigation
-  // with justLoggedIn via router state (see its navigate("/", ...)
-  // calls). Any OTHER way of landing on "/" (typing the URL, reopening
-  // a tab, a bookmark to the home page) means an existing, still-valid
-  // session is already in place — whether mid-call, or resumed via
-  // ws.js's within-window restore on the backend — so skip straight
-  // back into the app instead of making the agent click "Start
-  // working a campaign" again every single time they reopen the page.
-  //
-  // REAL BUG FIX, confirmed via a real reproduction: this used to
-  // unconditionally send EVERY role to /dialer here, on the assumption
-  // ("DialerPage's own mount logic already handles... so sending
-  // everyone there is safe regardless") that predates DialerPage.jsx
-  // later being restricted to only agent/supervisor/training_quality.
-  // For any OTHER role, that assumption became actively wrong:
-  // DialerPage.jsx bounces them straight back to "/" with a fresh
-  // <Navigate> (no justLoggedIn state on that bounce-back), which
-  // immediately re-triggered THIS effect, which sent them back to
-  // /dialer again — a genuine, confirmed infinite redirect loop,
-  // reproduced live with an account_manager login, that Chrome's own
-  // navigation-throttling protection eventually flooded the console
-  // over ("Throttling navigation to prevent the browser from
-  // hanging").
-  //
-  // Fixed by making this redirect role-aware, per explicit request:
-  //   - agent/supervisor -> /dialer (they actively work campaigns —
-  //     the dialer IS their default landing spot)
-  //   - training_quality -> /live-status ("Agent Status" — lands here
-  //     by default even though, per CampaignSelectPage.jsx's own new
-  //     role guard below, they CAN still navigate to /dialer and
-  //     select campaigns to work when needed; this only decides where
-  //     they land automatically on login, not what they're allowed to
-  //     do)
+  // UPDATED — the web dialer and campaign selection were removed: calls are
+  // handled only in the CMX CallSuite Desktop app. Agents never leave this
+  // page; it IS their dashboard (AgentDashboard below), on every visit, not
+  // just right after login. Every other role keeps the existing behavior:
+  // the welcome/2FA card right after a fresh login (LoginPage.jsx tags that
+  // navigation with justLoggedIn), otherwise straight to its home page:
   //   - admin/wfm -> /admin
-  //   - everyone else (account_manager, and any future role not yet
-  //     covered above) -> /live-status (matches
-  //     LiveStatusDashboard.jsx's own allow-list, which already
-  //     explicitly includes account_manager)
+  //   - supervisor, training_quality, account_manager, anything else -> /live-status
+  const isAgent = agent?.accessLevel === "agent";
+
   useEffect(() => {
     if (location.state?.justLoggedIn) return;
-    if (!agent) return;
+    if (!agent || agent.accessLevel === "agent") return;
 
-    if (["agent", "supervisor"].includes(agent.accessLevel)) {
-      navigate("/dialer", { replace: true });
-    } else if (["admin", "wfm"].includes(agent.accessLevel)) {
+    if (["admin", "wfm"].includes(agent.accessLevel)) {
       navigate("/admin", { replace: true });
     } else {
-      // training_quality, account_manager, and anything else not
-      // covered above.
       navigate("/live-status", { replace: true });
     }
   }, [location.state, agent, navigate]);
 
-  if (!location.state?.justLoggedIn) {
+  if (!isAgent && !location.state?.justLoggedIn) {
     return null; // redirecting — nothing to render
   }
 
@@ -75,34 +43,16 @@ export default function LandingPage() {
         <h2>Welcome, {agent.fullName.split(" ")[0]}</h2>
         <span className="badge">{agent.accessLevel}</span>
 
-        <div className="card" style={{ marginTop: 20 }}>
-          {/* REAL FIX, per explicit request: this used to show "Start
-              working a campaign" purely based on whether the account
-              happened to have a phone extension bound at all —
-              admin/account_manager/wfm accounts CAN have one bound
-              (nothing in this app's data model prevents it), but per
-              this same page's own role-aware redirect above (and
-              CampaignSelectPage.jsx's own role guard, which would
-              immediately bounce them right back out anyway), none of
-              these three roles are ever meant to work a campaign —
-              having an extension bound doesn't change that. Now
-              explicitly excludes these three regardless of extension. */}
-          {agent.extension && !["admin", "account_manager", "wfm"].includes(agent.accessLevel) ? (
-            <>
-              <p>
-                Your phone extension: <strong>{agent.extension}</strong>
-              </p>
-              <Link to="/select-campaign">
-                <button className="button-secondary">Start working a campaign</button>
-              </Link>
-            </>
-          ) : ["admin", "account_manager", "wfm"].includes(agent.accessLevel) ? (
-            <p>Your account doesn't work campaigns directly — see the nav above for what's available to you.</p>
+        <div style={{ marginTop: 20 }}>
+          {isAgent ? (
+            <AgentDashboard agent={agent} />
           ) : (
-            <p>
-              Your account has no phone extension assigned — you're set up as an admin/support
-              account without dialing access.
-            </p>
+            <div className="card">
+              <p>
+                Calls are handled in the <strong>CMX CallSuite Desktop</strong> app. See the navigation above for what's
+                available to you here.
+              </p>
+            </div>
           )}
         </div>
 

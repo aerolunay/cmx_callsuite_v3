@@ -72,6 +72,7 @@ export const api = {
   // getAbandonedCalls/getTotalCalls/etc. elsewhere in this file), per
   // explicit request to retire the single "Main Campaign" concept.
   getCallLog: (campaignId) => request(`/dialer/call-log${campaignId ? `?campaignId=${encodeURIComponent(campaignId)}` : ""}`),
+  getMyStatusSummary: () => request("/dialer/my-status-summary"),
   getTodayStats: (campaignId) =>
     request(`/dialer/stats/today${campaignId ? `?campaignId=${encodeURIComponent(campaignId)}` : ""}`),
 

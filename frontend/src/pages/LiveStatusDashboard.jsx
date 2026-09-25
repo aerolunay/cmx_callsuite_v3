@@ -258,30 +258,8 @@ export default function LiveStatusDashboard() {
     setListenBusyId(agentRow.appUserId);
     setError("");
     try {
-      // REAL BUG FIX, confirmed live: even with mic permission already
-      // granted, browsers can still block a LATER, purely programmatic
-      // getUserMedia() call (the one inside PhoneContext.jsx's
-      // auto-answer, which only fires once the incoming call actually
-      // arrives a moment after this click, not synchronously tied to
-      // it) with "User Denied Media Access" — access to something as
-      // sensitive as the microphone often needs a genuinely RECENT
-      // user gesture, not just a standing grant. Requesting it here,
-      // directly inside this real click handler, satisfies that
-      // recency requirement so the auto-answer's own request a moment
-      // later succeeds instead of being silently blocked. The stream
-      // itself isn't needed — immediately stopped once acquired; this
-      // call exists purely to "warm up" permission at the right,
-      // real-gesture moment.
-      try {
-        const warmupStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        warmupStream.getTracks().forEach((track) => track.stop());
-      } catch (micErr) {
-        // Don't block the actual Listen attempt on this — worst case,
-        // the auto-answer still hits the same error it would have
-        // anyway, no worse off than before this fix existed.
-        console.warn("Microphone warm-up failed:", micErr.message);
-      }
-
+      // Listen audio is delivered to the supervisor's CMX CallSuite Desktop
+      // app (the web phone was removed), so no browser microphone here.
       await api.startListen(agentRow.appUserId);
       setListeningTo({ appUserId: agentRow.appUserId, fullName: agentRow.fullName });
     } catch (err) {

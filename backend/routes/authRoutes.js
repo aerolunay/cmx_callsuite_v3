@@ -607,7 +607,10 @@ router.post("/logout", async (req, res) => {
   // the agent still genuinely being in that status. This is what
   // makes "Logged Out" a real, detectable state on the live-status
   // dashboard rather than something that just silently never happens.
-  if (req.session && req.session.agent) {
+  // Only a PHONE session (the desktop app) ends the agent's status on logout.
+  // Signing out of the web dashboard must not knock a still-running desktop
+  // app out of its Ready/In Call status. See dialerRoutes.js webrtc-credentials.
+  if (req.session && req.session.agent && req.session.dialerSession) {
     try {
       await agentStatusService.closeCurrentStatus(req.session.agent.appUserId);
     } catch (err) {

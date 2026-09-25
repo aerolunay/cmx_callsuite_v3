@@ -71,6 +71,10 @@ or inboundCallService.js changes needed for that part.
 */
 router.get("/dialer/webrtc-credentials", requireAuth, async (req, res) => {
   const { extension } = req.session.agent;
+  // Marks this login as a PHONE session (the desktop app fetches these to
+  // register its phone). Web logins never do, so logging out of the web
+  // dashboard doesn't close the agent's status — see authRoutes.js logout.
+  req.session.dialerSession = true;
 
   if (!extension) {
     return res.status(409).json({
@@ -690,6 +694,7 @@ router.get("/dialer/status", requireAuth, async (req, res) => {
 router.post("/dialer/status", requireAuth, async (req, res) => {
   try {
     const { status, campaignId } = req.body;
+    req.session.dialerSession = true; // see webrtc-credentials above
 
     if (!agentStatusService.isManualStatus(status)) {
       return res.status(400).json({
@@ -1426,6 +1431,47 @@ page's "All Campaigns" option — this route was just never allowed to
 actually take advantage of that itself, until now.
 ==================================================
 */
+/*
+==================================================
+GET /api/dialer/my-status-summary
+==================================================
+For the agent's own web dashboard: how long they've spent in each status
+today (US Eastern calendar day, same bounds as /dialer/stats/today).
+Rows that started yesterday or are still open are clipped to today /
+now. Returns { statuses: [{ status, seconds }], firstStartedAt, totalSeconds }.
+==================================================
+*/
+router.get("/dialer/my-status-summary", requireAuth, async (req, res) => {
+  try {
+    const { appUserId } = req.session.agent;
+    const { start, end } = await statsService.getEasternDayBoundsForServerClock();
+    const [rows] = await db.execute(
+      `
+        SELECT
+          status,
+          SUM(GREATEST(0, TIMESTAMPDIFF(SECOND, GREATEST(started_at, ?), LEAST(COALESCE(ended_at, NOW()), ?)))) AS seconds,
+          MIN(GREATEST(started_at, ?)) AS firstStartedAt
+        FROM cmx_dialer.agent_status_log
+        WHERE app_user_id = ?
+          AND started_at <= ?
+          AND COALESCE(ended_at, NOW()) >= ?
+          AND status <> 'LOGGED_OUT'
+        GROUP BY status
+        ORDER BY seconds DESC
+      `,
+      [start, end, start, appUserId, end, start]
+    );
+
+    const statuses = rows.map((r) => ({ status: r.status, seconds: Number(r.seconds) || 0 }));
+    const totalSeconds = statuses.reduce((sum, r) => sum + r.seconds, 0);
+    const firstStartedAt = rows.reduce((min, r) => (!min || (r.firstStartedAt && r.firstStartedAt < min) ? r.firstStartedAt : min), null);
+    return res.json({ success: true, statuses, totalSeconds, firstStartedAt });
+  } catch (error) {
+    console.error("GET /api/dialer/my-status-summary failed:", error);
+    return res.status(500).json({ success: false, message: "Failed to load today's status summary." });
+  }
+});
+
 router.get("/dialer/stats/today", requireAuth, async (req, res) => {
   try {
     const { campaignId } = req.query;

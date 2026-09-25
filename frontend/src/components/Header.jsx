@@ -43,7 +43,9 @@ export default function Header({ agentStatus }) {
             ==================================================
             NAV MATRIX — per the finished access-level spec
             ==================================================
-            Dialer      : agent, supervisor, training_quality
+            Dialer      : REMOVED from the web app — calls are handled only in the
+                          CMX CallSuite Desktop app. Agents land on their own
+                          dashboard (LandingPage.jsx).
             Live Status : supervisor, training_quality, account_manager, wfm, admin
             Reports     : supervisor, account_manager, wfm, admin (NOT training_quality)
             Leads Dashboard : supervisor, account_manager, wfm, admin (same
@@ -74,11 +76,6 @@ export default function Header({ agentStatus }) {
             here either.
             ==================================================
           */}
-          {["supervisor", "training_quality"].includes(agent.accessLevel) && (
-            <Link to="/dialer" className="header-admin-link">
-              Dialer
-            </Link>
-          )}
           {["supervisor", "training_quality", "account_manager", "wfm", "admin"].includes(agent.accessLevel) && (
             <Link to="/live-status" className="header-admin-link">
               Live Status

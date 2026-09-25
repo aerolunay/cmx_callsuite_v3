@@ -1,8 +1,6 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import LoginPage from "./pages/LoginPage";
 import LandingPage from "./pages/LandingPage";
-import CampaignSelectPage from "./pages/CampaignSelectPage";
-import DialerPage from "./pages/DialerPage";
 import AdminPage from "./pages/AdminPage";
 import LiveStatusDashboard from "./pages/LiveStatusDashboard";
 import ReportsPage from "./pages/ReportsPage";
@@ -11,18 +9,10 @@ import RecordingsPage from "./pages/RecordingsPage";
 import VoicemailsPage from "./pages/VoicemailsPage";
 import VoicemailPlayerPage from "./pages/VoicemailPlayerPage";
 import ProtectedRoute from "./components/ProtectedRoute";
-import InboundCallRedirector from "./components/InboundCallRedirector";
 
 export default function App() {
   return (
     <>
-      {/* Per explicit request — auto-redirects to /dialer the instant
-          a call starts ringing for this agent, regardless of which
-          page they're currently on. Needs to be inside the Router
-          (for useNavigate/useLocation) but not tied to any single
-          route, so it sits alongside <Routes> rather than inside any
-          one of them. */}
-      <InboundCallRedirector />
       <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route
@@ -33,22 +23,11 @@ export default function App() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/select-campaign"
-        element={
-          <ProtectedRoute>
-            <CampaignSelectPage />
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/dialer"
-        element={
-          <ProtectedRoute>
-            <DialerPage />
-          </ProtectedRoute>
-        }
-      />
+      {/* The web dialer and campaign selection were removed: calls are handled
+          only in the CMX CallSuite Desktop app. Old links/bookmarks land on
+          the home page (the agent dashboard for agents). */}
+      <Route path="/select-campaign" element={<Navigate to="/" replace />} />
+      <Route path="/dialer" element={<Navigate to="/" replace />} />
       <Route
         path="/admin"
         element={
