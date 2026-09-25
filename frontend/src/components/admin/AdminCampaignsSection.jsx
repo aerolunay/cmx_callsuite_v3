@@ -2,6 +2,46 @@ import { useEffect, useState } from "react";
 import { api } from "../../api";
 import { getInboundDispositionsForCampaign, getOutboundDispositionsForCampaign } from "../../constants/dispositions";
 
+// IVR language menu ("Require Translation") — must match TRANSLATION_LANGUAGES in
+// backend/routes/campaignRoutes.js. defaultRouting is applied when a language is picked.
+const TRANSLATION_LANGUAGE_OPTIONS = [
+  { value: "en", label: "English", defaultRouting: "agents" },
+  { value: "es", label: "Spanish", defaultRouting: "transfer" },
+  { value: "zh-cmn", label: "Mandarin", defaultRouting: "ai" },
+  { value: "zh-yue", label: "Cantonese", defaultRouting: "ai" },
+  { value: "pt", label: "Portuguese", defaultRouting: "ai" },
+  { value: "ru", label: "Russian", defaultRouting: "ai" },
+  { value: "bn", label: "Bengali", defaultRouting: "ai" },
+  { value: "ko", label: "Korean", defaultRouting: "ai" },
+  { value: "ht", label: "Haitian Creole", defaultRouting: "ai" },
+];
+const TRANSLATION_ROUTING_OPTIONS = [
+  { value: "agents", label: "Connect normally (agents)" },
+  { value: "transfer", label: "Transfer to a number" },
+  { value: "ai", label: "AI interpreter (English agent)" },
+];
+const DEFAULT_TRANSLATION_ROWS = [
+  { key: 1, language: "en", routing: "agents", transferNumber: "" },
+  { key: 2, language: "es", routing: "transfer", transferNumber: "" },
+];
+
+function parseTranslationRows(value) {
+  try {
+    const rows = typeof value === "string" ? JSON.parse(value) : value;
+    if (Array.isArray(rows) && rows.length) {
+      return rows.map((r) => ({
+        key: Number(r.key),
+        language: r.language,
+        routing: r.routing,
+        transferNumber: r.transferNumber || "",
+      }));
+    }
+  } catch {
+    /* fall through to defaults */
+  }
+  return DEFAULT_TRANSLATION_ROWS.map((r) => ({ ...r }));
+}
+
 /*
 ==================================================
 ACTION ICONS — plain inline SVG, deliberately NOT a new npm dependency
@@ -388,6 +428,11 @@ export default function AdminCampaignsSection() {
   const [voicemailPromptAudioFile, setVoicemailPromptAudioFile] = useState(null);
   const [afterhoursVoicemailPromptAudioFile, setAfterhoursVoicemailPromptAudioFile] = useState(null);
   const [voicemailInvalidOptionAudioFile, setVoicemailInvalidOptionAudioFile] = useState(null);
+  // IVR language menu — BLENDED campaigns only. Unchecked = normal routing, unchanged.
+  const [translationEnabled, setTranslationEnabled] = useState(false);
+  const [translationRows, setTranslationRows] = useState(() => DEFAULT_TRANSLATION_ROWS.map((r) => ({ ...r })));
+  const [languageMenuAudioFile, setLanguageMenuAudioFile] = useState(null);
+  const [hasLanguageMenuAudio, setHasLanguageMenuAudio] = useState(false);
 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
@@ -441,6 +486,10 @@ export default function AdminCampaignsSection() {
     setVoicemailPromptAudioFile(null);
     setAfterhoursVoicemailPromptAudioFile(null);
     setVoicemailInvalidOptionAudioFile(null);
+    setTranslationEnabled(false);
+    setTranslationRows(DEFAULT_TRANSLATION_ROWS.map((r) => ({ ...r })));
+    setLanguageMenuAudioFile(null);
+    setHasLanguageMenuAudio(false);
     setError("");
     setSuccess("");
   }
@@ -483,8 +532,60 @@ export default function AdminCampaignsSection() {
     setVoicemailPromptAudioFile(null);
     setAfterhoursVoicemailPromptAudioFile(null);
     setVoicemailInvalidOptionAudioFile(null);
+    setTranslationEnabled(c.translation_enabled === "Y");
+    setTranslationRows(parseTranslationRows(c.translation_languages));
+    setLanguageMenuAudioFile(null);
+    setHasLanguageMenuAudio(Boolean(c.language_menu_audio_filename));
     setError("");
     setSuccess("");
+  }
+
+  // ---- IVR language menu rows
+  function updateTranslationRow(index, changes) {
+    setTranslationRows((rows) =>
+      rows.map((row, i) => {
+        if (i !== index) return row;
+        const next = { ...row, ...changes };
+        if (changes.language) {
+          const option = TRANSLATION_LANGUAGE_OPTIONS.find((o) => o.value === changes.language);
+          next.routing = option ? option.defaultRouting : "agents";
+        }
+        return next;
+      })
+    );
+  }
+
+  function addTranslationRow() {
+    setTranslationRows((rows) => {
+      if (rows.length >= 9) return rows;
+      const usedKeys = new Set(rows.map((r) => Number(r.key)));
+      const usedLanguages = new Set(rows.map((r) => r.language));
+      const key = [1, 2, 3, 4, 5, 6, 7, 8, 9].find((k) => !usedKeys.has(k));
+      const option = TRANSLATION_LANGUAGE_OPTIONS.find((o) => !usedLanguages.has(o.value));
+      if (!key || !option) return rows;
+      return [...rows, { key, language: option.value, routing: option.defaultRouting, transferNumber: "" }];
+    });
+  }
+
+  function removeTranslationRow(index) {
+    setTranslationRows((rows) => (rows.length <= 1 ? rows : rows.filter((_, i) => i !== index)));
+  }
+
+  function translationProblem() {
+    if (!translationEnabled || campaignType !== "BLENDED") return "";
+    const keys = new Set();
+    const languages = new Set();
+    for (const row of translationRows) {
+      const label = TRANSLATION_LANGUAGE_OPTIONS.find((o) => o.value === row.language)?.label || row.language;
+      if (keys.has(Number(row.key))) return `IVR option ${row.key} is used more than once.`;
+      if (languages.has(row.language)) return `${label} is listed more than once.`;
+      if (row.routing === "transfer" && row.transferNumber.replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "").length !== 10) {
+        return `${label}: enter a 10-digit transfer number.`;
+      }
+      keys.add(Number(row.key));
+      languages.add(row.language);
+    }
+    return "";
   }
 
   async function handleDeactivate(c) {
@@ -566,6 +667,22 @@ export default function AdminCampaignsSection() {
     if (voicemailPromptAudioFile) formData.append("voicemailPromptAudio", voicemailPromptAudioFile);
     if (afterhoursVoicemailPromptAudioFile) formData.append("afterhoursVoicemailPromptAudio", afterhoursVoicemailPromptAudioFile);
     if (voicemailInvalidOptionAudioFile) formData.append("voicemailInvalidOptionAudio", voicemailInvalidOptionAudioFile);
+    const translationOn = translationEnabled && campaignType === "BLENDED";
+    formData.append("translationEnabled", String(translationOn));
+    formData.append(
+      "translationLanguages",
+      JSON.stringify(
+        translationOn
+          ? translationRows.map((r) => ({
+              key: Number(r.key),
+              language: r.language,
+              routing: r.routing,
+              ...(r.routing === "transfer" ? { transferNumber: r.transferNumber } : {}),
+            }))
+          : []
+      )
+    );
+    if (translationOn && languageMenuAudioFile) formData.append("languageMenuAudio", languageMenuAudioFile);
     return formData;
   }
 
@@ -588,6 +705,12 @@ export default function AdminCampaignsSection() {
           "(QuestBlue rejects the fake placeholder Caller ID with a SIP 403). Enter a real, provisioned Caller ID below, " +
           "or add a DID, before saving."
       );
+      return;
+    }
+
+    const problem = translationProblem();
+    if (problem) {
+      setError(problem);
       return;
     }
 
@@ -882,6 +1005,133 @@ export default function AdminCampaignsSection() {
                       Played once when an unrecognized key is pressed (in either prompt above, or after the caller records
                       their message), before trying again.
                     </p>
+                  </>
+                )}
+
+                {/* IVR LANGUAGE MENU — BLENDED (inbound) campaigns only, business hours only. */}
+                {campaignType === "BLENDED" && (
+                  <>
+                    <label className="disposition-row" style={{ marginTop: 14 }}>
+                      <input
+                        type="checkbox"
+                        checked={translationEnabled}
+                        onChange={(e) => setTranslationEnabled(e.target.checked)}
+                      />
+                      Require Translation (IVR language menu)
+                    </label>
+
+                    {translationEnabled && (
+                      <div style={{ marginTop: 8, padding: 10, border: "1px solid #d9dee6", borderRadius: 8 }}>
+                        <p style={{ fontSize: 13, color: "#888", marginTop: 0 }}>
+                          Played right after the welcome greeting during business hours. No key or an invalid key replays
+                          the menu once, then connects in English.
+                        </p>
+
+                        <div style={{ overflowX: "auto" }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                            <thead>
+                              <tr style={{ textAlign: "left", fontSize: 13 }}>
+                                <th style={{ padding: 4 }}>IVR Option</th>
+                                <th style={{ padding: 4 }}>Language</th>
+                                <th style={{ padding: 4 }}>Routing</th>
+                                <th style={{ padding: 4 }}>Transfer Number</th>
+                                <th style={{ padding: 4 }} />
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {translationRows.map((row, index) => {
+                                const otherKeys = new Set(translationRows.filter((_, i) => i !== index).map((r) => Number(r.key)));
+                                const otherLanguages = new Set(translationRows.filter((_, i) => i !== index).map((r) => r.language));
+                                return (
+                                  <tr key={index}>
+                                    <td style={{ padding: 4 }}>
+                                      <select
+                                        value={row.key}
+                                        onChange={(e) => updateTranslationRow(index, { key: Number(e.target.value) })}
+                                      >
+                                        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((k) => (
+                                          <option key={k} value={k} disabled={otherKeys.has(k)}>
+                                            {k}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </td>
+                                    <td style={{ padding: 4 }}>
+                                      <select
+                                        value={row.language}
+                                        onChange={(e) => updateTranslationRow(index, { language: e.target.value })}
+                                      >
+                                        {TRANSLATION_LANGUAGE_OPTIONS.map((o) => (
+                                          <option key={o.value} value={o.value} disabled={otherLanguages.has(o.value)}>
+                                            {o.label}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    </td>
+                                    <td style={{ padding: 4 }}>
+                                      <select
+                                        value={row.routing}
+                                        onChange={(e) => updateTranslationRow(index, { routing: e.target.value })}
+                                      >
+                                        {TRANSLATION_ROUTING_OPTIONS.filter((o) => !(row.language === "en" && o.value === "ai")).map(
+                                          (o) => (
+                                            <option key={o.value} value={o.value}>
+                                              {o.label}
+                                            </option>
+                                          )
+                                        )}
+                                      </select>
+                                    </td>
+                                    <td style={{ padding: 4 }}>
+                                      {row.routing === "transfer" ? (
+                                        <input
+                                          type="tel"
+                                          placeholder="10-digit number"
+                                          value={row.transferNumber}
+                                          onChange={(e) => updateTranslationRow(index, { transferNumber: e.target.value })}
+                                        />
+                                      ) : (
+                                        <span style={{ color: "#888" }}>—</span>
+                                      )}
+                                    </td>
+                                    <td style={{ padding: 4 }}>
+                                      <button
+                                        type="button"
+                                        className="link"
+                                        onClick={() => removeTranslationRow(index)}
+                                        disabled={translationRows.length <= 1}
+                                      >
+                                        Remove
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        <button
+                          type="button"
+                          className="button-secondary"
+                          style={{ marginTop: 8 }}
+                          onClick={addTranslationRow}
+                          disabled={translationRows.length >= 9}
+                        >
+                          + Add language {translationRows.length >= 9 ? "(maximum 9)" : `(${translationRows.length}/9)`}
+                        </button>
+
+                        <label className="comments-label" style={{ marginTop: 12 }}>
+                          Language Menu Prompt{" "}
+                          {editingCampaignId && hasLanguageMenuAudio ? "(leave blank to keep current)" : "(required)"}
+                        </label>
+                        <input type="file" accept="audio/*" onChange={(e) => setLanguageMenuAudioFile(e.target.files?.[0] || null)} />
+                        <p style={{ fontSize: 13, color: "#888", marginTop: 4 }}>
+                          One recording that lists every option above, e.g. "For English press 1. Para español oprima 2. …".
+                          Transfer numbers that are one of our own DIDs route straight into that campaign.
+                        </p>
+                      </div>
+                    )}
                   </>
                 )}
 

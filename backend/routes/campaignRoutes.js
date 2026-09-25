@@ -16,6 +16,96 @@ const router = express.Router();
 
 /*
 ==================================================
+IVR LANGUAGE MENU ("Require Translation")
+==================================================
+Per-campaign, BLENDED campaigns only, business hours only. When enabled,
+the caller hears the uploaded language-menu prompt right after the
+welcome greeting and presses a key (1-9). Each option routes one of
+three ways:
+  agents   -> the campaign's normal inbound flow (queue/agents)
+  transfer -> dialled out through the campaign's outbound trunk to a
+              fixed number (or, if that number is one of our own DIDs,
+              straight into that campaign)
+  ai       -> the normal inbound flow, tagged with the caller's language
+              (lang=...&interpreter=1 on allocate-inbound-room) so the
+              AI interpreter service can join the call
+No key / invalid key -> menu replayed once, then English (normal flow).
+Unchecked -> nothing changes at all: the dialplan is exactly as before.
+==================================================
+*/
+const TRANSLATION_LANGUAGES = {
+  en: { label: "English", defaultRouting: "agents" },
+  es: { label: "Spanish", defaultRouting: "transfer" },
+  "zh-cmn": { label: "Mandarin", defaultRouting: "ai" },
+  "zh-yue": { label: "Cantonese", defaultRouting: "ai" },
+  pt: { label: "Portuguese", defaultRouting: "ai" },
+  ru: { label: "Russian", defaultRouting: "ai" },
+  bn: { label: "Bengali", defaultRouting: "ai" },
+  ko: { label: "Korean", defaultRouting: "ai" },
+  ht: { label: "Haitian Creole", defaultRouting: "ai" },
+};
+const TRANSLATION_ROUTINGS = ["agents", "transfer", "ai"];
+
+/** Validates the admin form's translation fields. Returns { enabled, languages } or { error }. */
+function parseTranslationSettings(body, campaignType) {
+  const enabled = body.translationEnabled === "true" && campaignType === "BLENDED";
+  if (!enabled) return { enabled: "N", languages: null };
+
+  let rows;
+  try {
+    rows = JSON.parse(body.translationLanguages || "[]");
+  } catch {
+    return { error: "Translation languages are not valid JSON." };
+  }
+  if (!Array.isArray(rows) || rows.length < 1 || rows.length > 9) {
+    return { error: "Add between 1 and 9 languages to the IVR menu." };
+  }
+
+  const keys = new Set();
+  const languages = new Set();
+  const clean = [];
+  for (const row of rows) {
+    const key = Number(row.key);
+    const lang = TRANSLATION_LANGUAGES[row.language];
+    if (!Number.isInteger(key) || key < 1 || key > 9) return { error: "Each IVR option must be a key from 1 to 9." };
+    if (keys.has(key)) return { error: `IVR option ${key} is used more than once.` };
+    if (!lang) return { error: `Unknown language "${row.language}".` };
+    if (languages.has(row.language)) return { error: `${lang.label} is listed more than once.` };
+
+    const routing = TRANSLATION_ROUTINGS.includes(row.routing) ? row.routing : lang.defaultRouting;
+    if (routing === "ai" && row.language === "en") return { error: "English can't be routed to the AI interpreter." };
+
+    let transferNumber;
+    if (routing === "transfer") {
+      transferNumber = String(row.transferNumber || "").replace(/\D/g, "");
+      if (transferNumber.length === 11 && transferNumber.startsWith("1")) transferNumber = transferNumber.slice(1);
+      if (transferNumber.length !== 10) return { error: `${lang.label}: enter a 10-digit transfer number.` };
+    }
+
+    keys.add(key);
+    languages.add(row.language);
+    clean.push({ key, language: row.language, routing, ...(transferNumber ? { transferNumber } : {}) });
+  }
+
+  clean.sort((a, b) => a.key - b.key);
+  return { enabled: "Y", languages: JSON.stringify(clean) };
+}
+
+/** Reads the stored JSON column (string or already-parsed) into a safe array. */
+function storedTranslationLanguages(value) {
+  if (!value) return [];
+  try {
+    const rows = typeof value === "string" ? JSON.parse(value) : value;
+    return Array.isArray(rows)
+      ? rows.filter((r) => Number.isInteger(r.key) && r.key >= 1 && r.key <= 9 && TRANSLATION_LANGUAGES[r.language])
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+/*
+==================================================
 CAMPAIGN MANAGEMENT — create/edit/delete campaigns, with auto-created
 DID routing, audio prompts, and dialplan
 ==================================================
@@ -316,6 +406,10 @@ function buildCampaignDialplanBlock({
   afterhoursVoicemailPromptAudioFilename,
   voicemailInvalidOptionAudioFilename,
   voicemailWaitSeconds,
+  translationEnabled,
+  translationLanguages,
+  languageMenuAudioFilename,
+  outboundTrunk,
 }) {
   // Per explicit request, confirmed as a real gap via a live test
   // call: an OUTBOUND campaign's own DID was routing inbound calls
@@ -412,8 +506,60 @@ function buildCampaignDialplanBlock({
     lines.push(`exten => ${did},n,Playback(${greetingSound})`);
   }
 
+  // IVR LANGUAGE MENU — see TRANSLATION_LANGUAGES at the top of this file.
+  const languageOptions = translationEnabled === "Y" ? storedTranslationLanguages(translationLanguages) : [];
+  const routeLabel = `${did}_route`;
+  if (languageOptions.length) {
+    const menuLabel = `${did}_lang_menu`;
+    const menuSound = languageMenuAudioFilename
+      ? `custom/${path.basename(languageMenuAudioFilename, path.extname(languageMenuAudioFilename))}`
+      : "";
+    lines.push(
+      `exten => ${did},n,Set(CMXLANG=en)`,
+      `exten => ${did},n,Set(CMXLANGTRIES=0)`,
+      `exten => ${did},n(${menuLabel}),Read(CMXLANGKEY,${menuSound},1,,,6)`
+    );
+    for (const option of languageOptions) {
+      lines.push(`exten => ${did},n,GotoIf($["\${CMXLANGKEY}" = "${option.key}"]?${did}_lang_${option.key})`);
+    }
+    lines.push(`exten => ${did},n,Set(CMXLANGTRIES=$[\${CMXLANGTRIES} + 1])`);
+    if (voicemailInvalidOptionSound) {
+      lines.push(`exten => ${did},n,ExecIf($["\${CMXLANGKEY}" != ""]?Playback(${voicemailInvalidOptionSound}))`);
+    }
+    lines.push(
+      // One replay, then default to English / the normal flow.
+      `exten => ${did},n,GotoIf($[\${CMXLANGTRIES} < 2]?${menuLabel})`,
+      `exten => ${did},n,Goto(${routeLabel})`
+    );
+
+    for (const option of languageOptions) {
+      const label = `${did}_lang_${option.key}`;
+      if (option.routing === "transfer") {
+        // Same outbound path as agent-dialled calls (Local channel into
+        // [trunkinbound] with CMXTRUNK), AMD off. If the number is one of
+        // our own DIDs, the exact DID extension wins and it routes
+        // internally to that campaign instead.
+        lines.push(
+          `exten => ${did},n(${label}),NoOp(CMX Campaign ${campaignId} IVR ${option.key}: ${option.language} -> transfer ${option.transferNumber})`,
+          `exten => ${did},n,Set(CMXLANG=${option.language})`,
+          `exten => ${did},n,Set(__SKIP_AMD=1)`,
+          `exten => ${did},n,Set(__CMXTRUNK=${outboundTrunk || "CMXCallSuite"})`,
+          `exten => ${did},n,Dial(Local/${option.transferNumber}@trunkinbound,60)`,
+          `exten => ${did},n,Hangup()`
+        );
+      } else {
+        lines.push(`exten => ${did},n(${label}),Set(CMXLANG=${option.language})`);
+        if (option.routing === "ai") lines.push(`exten => ${did},n,Set(CMXINTERPRETER=1)`);
+        lines.push(`exten => ${did},n,Goto(${routeLabel})`);
+      }
+    }
+  }
+
+  const roomQuery = languageOptions.length
+    ? `&did=${did}&lang=\${CMXLANG}&interpreter=\${CMXINTERPRETER}`
+    : `&did=${did}`;
   lines.push(
-    `exten => ${did},n,Set(ROOM=\${CURL(${INTERNAL_API_BASE_URL}/internal/allocate-inbound-room?secret=${INTERNAL_API_SECRET}&did=${did})})`,
+    `exten => ${did},n${languageOptions.length ? `(${routeLabel})` : ""},Set(ROOM=\${CURL(${INTERNAL_API_BASE_URL}/internal/allocate-inbound-room?secret=${INTERNAL_API_SECRET}${roomQuery})})`,
     `exten => ${did},n,GotoIf($["\${ROOM}" = ""]?${noRoomLabel})`
   );
 
@@ -592,7 +738,11 @@ async function regenerateCampaignDialplanFile() {
         s.voicemail_prompt_audio_filename AS voicemailPromptAudioFilename,
         s.afterhours_voicemail_prompt_audio_filename AS afterhoursVoicemailPromptAudioFilename,
         s.voicemail_invalid_option_audio_filename AS voicemailInvalidOptionAudioFilename,
-        s.voicemail_wait_seconds AS voicemailWaitSeconds
+        s.voicemail_wait_seconds AS voicemailWaitSeconds,
+        s.translation_enabled AS translationEnabled,
+        s.translation_languages AS translationLanguages,
+        s.language_menu_audio_filename AS languageMenuAudioFilename,
+        s.outbound_trunk AS outboundTrunk
       FROM asterisk.vicidial_inbound_dids d
       JOIN cmx_dialer.campaign_settings s ON s.campaign_id = d.campaign_id
       JOIN asterisk.vicidial_campaigns c ON c.campaign_id = d.campaign_id
@@ -658,7 +808,8 @@ router.get("/", requireAdmin, async (req, res) => {
           s.campaign_type, s.welcome_greeting_filename, s.afterhours_audio_filename,
           s.business_hours_start, s.business_hours_end, s.business_days, s.blended_fallback_campaign_id,
           s.voicemail_business_hours_enabled, s.voicemail_afterhours_enabled, s.voicemail_prompt_audio_filename, s.afterhours_voicemail_prompt_audio_filename,
-          s.voicemail_invalid_option_audio_filename, s.voicemail_wait_seconds, s.outbound_trunk
+          s.voicemail_invalid_option_audio_filename, s.voicemail_wait_seconds, s.outbound_trunk,
+          s.translation_enabled, s.translation_languages, s.language_menu_audio_filename
         FROM asterisk.vicidial_campaigns c
         LEFT JOIN asterisk.vicidial_inbound_dids d ON d.campaign_id = c.campaign_id
         LEFT JOIN cmx_dialer.campaign_settings s ON s.campaign_id = c.campaign_id
@@ -701,6 +852,7 @@ router.post(
     { name: "voicemailPromptAudio", maxCount: 1 },
     { name: "afterhoursVoicemailPromptAudio", maxCount: 1 },
     { name: "voicemailInvalidOptionAudio", maxCount: 1 },
+    { name: "languageMenuAudio", maxCount: 1 },
   ]),
   async (req, res) => {
     const {
@@ -756,6 +908,11 @@ router.post(
     // ALLOWED_OUTBOUND_TRUNKS's own comment for why this matters more
     // than a typical form field.
     const resolvedOutboundTrunk = (await isValidOutboundTrunk(outboundTrunk)) ? outboundTrunk : "CMXCallSuite";
+
+    const translation = parseTranslationSettings(req.body, campaignType);
+    if (translation.error) {
+      return res.status(400).json({ success: false, message: translation.error });
+    }
 
     const connection = await db.getConnection();
     try {
@@ -824,6 +981,19 @@ router.post(
       const voicemailPromptFile = req.files?.voicemailPromptAudio?.[0];
       const afterhoursVoicemailPromptFile = req.files?.afterhoursVoicemailPromptAudio?.[0];
       const voicemailInvalidOptionFile = req.files?.voicemailInvalidOptionAudio?.[0];
+      const languageMenuFile = req.files?.languageMenuAudio?.[0];
+
+      await db.execute(
+        `UPDATE cmx_dialer.campaign_settings SET translation_enabled = ?, translation_languages = ? WHERE campaign_id = ?`,
+        [translation.enabled, translation.languages, campaignId]
+      );
+      if (languageMenuFile) {
+        const languageMenuAudioFilename = await processUploadedAudio(languageMenuFile, campaignId, "language-menu");
+        await db.execute(`UPDATE cmx_dialer.campaign_settings SET language_menu_audio_filename = ? WHERE campaign_id = ?`, [
+          languageMenuAudioFilename,
+          campaignId,
+        ]);
+      }
 
       let welcomeGreetingFilename = null;
       let afterhoursAudioFilename = null;
@@ -899,6 +1069,7 @@ router.put(
     { name: "voicemailPromptAudio", maxCount: 1 },
     { name: "afterhoursVoicemailPromptAudio", maxCount: 1 },
     { name: "voicemailInvalidOptionAudio", maxCount: 1 },
+    { name: "languageMenuAudio", maxCount: 1 },
   ]),
   async (req, res) => {
     const { campaignId } = req.params;
@@ -940,6 +1111,11 @@ router.put(
 
     // Per explicit request — same validation as the create route above.
     const resolvedOutboundTrunk = (await isValidOutboundTrunk(outboundTrunk)) ? outboundTrunk : "CMXCallSuite";
+
+    const translation = parseTranslationSettings(req.body, campaignType);
+    if (translation.error) {
+      return res.status(400).json({ success: false, message: translation.error });
+    }
 
     const connection = await db.getConnection();
     try {
@@ -1030,6 +1206,19 @@ router.put(
       const voicemailPromptFile = req.files?.voicemailPromptAudio?.[0];
       const afterhoursVoicemailPromptFile = req.files?.afterhoursVoicemailPromptAudio?.[0];
       const voicemailInvalidOptionFile = req.files?.voicemailInvalidOptionAudio?.[0];
+      const languageMenuFile = req.files?.languageMenuAudio?.[0];
+
+      await db.execute(
+        `UPDATE cmx_dialer.campaign_settings SET translation_enabled = ?, translation_languages = ? WHERE campaign_id = ?`,
+        [translation.enabled, translation.languages, campaignId]
+      );
+      if (languageMenuFile) {
+        const languageMenuAudioFilename = await processUploadedAudio(languageMenuFile, campaignId, "language-menu");
+        await db.execute(`UPDATE cmx_dialer.campaign_settings SET language_menu_audio_filename = ? WHERE campaign_id = ?`, [
+          languageMenuAudioFilename,
+          campaignId,
+        ]);
+      }
 
       let welcomeGreetingFilename = null;
       let afterhoursAudioFilename = null;
