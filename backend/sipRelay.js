@@ -58,20 +58,71 @@ server.on("upgrade", async (req, socket, head) => {
   wss.handleUpgrade(req, socket, head, (ws) => bridge(ws, agent));
 });
 
-function bridge(ws, agent) {
+/*
+ * STABLE ADDRESS PER EXTENSION
+ * Each extension always gets the SAME local UDP port (40000 + a hash of the
+ * extension, 40000-49999), so the phone's address as Asterisk sees it
+ * (127.0.0.1:<port>) never changes — not when the app reconnects, not after a
+ * network blip. A reconnect therefore can never leave Asterisk sending calls to
+ * a dead, old address. A newer connection for the same extension replaces the
+ * older one (the old socket is closed first so the port can be reused).
+ */
+const STABLE_PORT_BASE = Number(process.env.SIP_RELAY_PORT_BASE || 40000);
+const STABLE_PORT_RANGE = 10000;
+const bridges = new Map(); // extension -> { ws, udp }
+
+function stablePortFor(ext) {
+  let h = 0;
+  for (const ch of ext) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return STABLE_PORT_BASE + (h % STABLE_PORT_RANGE);
+}
+
+function bindStable(udp, port, attempt = 0) {
+  return new Promise((resolve) => {
+    const onError = (err) => {
+      udp.removeListener("listening", onListening);
+      if (err.code === "EADDRINUSE" && attempt < 20) {
+        // Old socket for this extension still closing — retry shortly.
+        setTimeout(() => bindStable(udp, port, attempt + 1).then(resolve), 100);
+      } else {
+        // Hash collision with another extension (or port taken): fall back to any
+        // port rather than refusing service. Logged so it can be noticed.
+        console.warn(`[sip-relay] stable port ${port} unavailable (${err.code}); using a random port`);
+        udp.bind(0, "127.0.0.1", () => resolve(false));
+      }
+    };
+    const onListening = () => {
+      udp.removeListener("error", onError);
+      resolve(true);
+    };
+    udp.once("error", onError);
+    udp.once("listening", onListening);
+    udp.bind(port, "127.0.0.1");
+  });
+}
+
+async function bridge(ws, agent) {
   const ext = String(agent.extension);
   const who = `${ext} (${agent.email || agent.appUserId})`;
+
+  // Replace any previous connection for this extension (reconnect / second app instance).
+  const previous = bridges.get(ext);
+  if (previous) {
+    console.log(`[sip-relay] ${who} reconnected — closing the previous connection`);
+    try { previous.udp.close(); } catch { /* already closed */ }
+    try { previous.ws.terminate(); } catch { /* already closed */ }
+  }
+
   const udp = dgram.createSocket("udp4");
+  const entry = { ws, udp };
+  bridges.set(ext, entry);
   let alive = true;
+  let ready = false;
+  const pending = []; // SIP from the app that arrives before the socket is bound
 
   udp.on("message", (msg) => {
     if (ws.readyState === WebSocket.OPEN) ws.send(msg.toString("utf8"));
   });
-  udp.on("error", (err) => {
-    console.error(`[sip-relay] UDP error for ${who}:`, err.message);
-    ws.close();
-  });
-  udp.bind(0, "127.0.0.1", () => console.log(`[sip-relay] ${who} connected as 127.0.0.1:${udp.address().port}`));
 
   ws.on("message", (data) => {
     const text = data.toString("utf8");
@@ -82,6 +133,7 @@ function bridge(ws, agent) {
         return;
       }
     }
+    if (!ready) return pending.push(text);
     udp.send(Buffer.from(text, "utf8"), ASTERISK_PORT, ASTERISK_HOST);
   });
 
@@ -94,9 +146,26 @@ function bridge(ws, agent) {
   ws.on("close", () => {
     clearInterval(ping);
     try { udp.close(); } catch { /* already closed */ }
+    if (bridges.get(ext) === entry) bridges.delete(ext);
     console.log(`[sip-relay] ${who} disconnected`);
   });
   ws.on("error", () => ws.terminate());
+
+  const port = stablePortFor(ext);
+  const stable = await bindStable(udp, port);
+  if (ws.readyState !== WebSocket.OPEN) {
+    try { udp.close(); } catch { /* ignore */ }
+    if (bridges.get(ext) === entry) bridges.delete(ext);
+    return;
+  }
+  udp.on("error", (err) => {
+    console.error(`[sip-relay] UDP error for ${who}:`, err.message);
+    ws.close();
+  });
+  ready = true;
+  console.log(`[sip-relay] ${who} connected as 127.0.0.1:${udp.address().port}${stable ? " (stable)" : ""}`);
+  for (const text of pending.splice(0)) udp.send(Buffer.from(text, "utf8"), ASTERISK_PORT, ASTERISK_HOST);
+
 }
 
 server.listen(PORT, "127.0.0.1", () => console.log(`[sip-relay] listening on 127.0.0.1:${PORT}`));
