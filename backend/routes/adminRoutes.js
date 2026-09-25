@@ -447,8 +447,46 @@ const PHONE_WIZARD_CONF_PATH = "/etc/asterisk/pjsip-phones-cmxdialer.conf";
 // webrtc = yes auto-sets ice_support, use_avpf, media_encryption=dtls,
 // rtcp_mux, and dtls_auto_generate_cert — no need to set those
 // individually.
-function buildPhoneWizardBlock({ extension, login, fullname }) {
+function buildPhoneWizardBlock({ extension, login, fullname, phone_type }) {
   const callerName = (fullname || login || extension).replace(/"/g, "");
+  // CMX desktop dialer: plain UDP SIP + ulaw/alaw, no WebRTC/DTLS/ICE.
+  if (phone_type === "DESKTOP") {
+    return [
+      `[${extension}]`,
+      `type = endpoint`,
+      `transport = transport-udp`,
+      `context = default`,
+      `disallow = all`,
+      `allow = ulaw,alaw`,
+      `direct_media = no`,
+      `rtp_symmetric = yes`,
+      `force_rport = yes`,
+      `rewrite_contact = yes`,
+      `media_address = ${process.env.SERVER_IP}`,
+      `auth = ${extension}`,
+      `aors = ${extension}`,
+      `callerid = "${callerName}" <0000000000>`,
+      `dtmf_mode = rfc4733`,
+      `send_rpid = yes`,
+      `trust_id_inbound = no`,
+      ``,
+      `[${extension}]`,
+      `type = auth`,
+      `auth_type = userpass`,
+      `username = ${login}`,
+      `password = ${PHONE_REGISTRATION_PASSWORD}`,
+      ``,
+      `[${extension}]`,
+      `type = aor`,
+      `max_contacts = 1`,
+      `remove_existing = yes`,
+      `qualify_frequency = 30`,
+      `maximum_expiration = 3600`,
+      `minimum_expiration = 60`,
+      `default_expiration = 120`,
+      ``,
+    ].join("\n");
+  }
   return [
     `[${extension}]`,
     `type = endpoint`,
@@ -483,7 +521,7 @@ function buildPhoneWizardBlock({ extension, login, fullname }) {
 
 async function regeneratePhoneWizardFile() {
   const [rows] = await db.execute(
-    `SELECT extension, login, fullname FROM asterisk.phones WHERE server_ip = ? AND active = 'Y'`,
+    `SELECT extension, login, fullname, phone_type FROM asterisk.phones WHERE server_ip = ? AND active = 'Y'`,
     [SERVER_IP]
   );
 
