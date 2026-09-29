@@ -12,7 +12,7 @@ export default function LandingPage() {
   const location = useLocation();
 
   // UPDATED — the web dialer and campaign selection were removed: calls are
-  // handled only in the CMX CallSuite Desktop app. Agents never leave this
+  // handled only in the VoxSuite desktop app. Agents never leave this
   // page; it IS their dashboard (AgentDashboard below), on every visit, not
   // just right after login. Every other role keeps the existing behavior:
   // the welcome/2FA card right after a fresh login (LoginPage.jsx tags that
@@ -49,7 +49,7 @@ export default function LandingPage() {
           ) : (
             <div className="card">
               <p>
-                Calls are handled in the <strong>CMX CallSuite Desktop</strong> app. See the navigation above for what's
+                Calls are handled in the <strong>VoxSuite</strong> desktop app. See the navigation above for what's
                 available to you here.
               </p>
             </div>

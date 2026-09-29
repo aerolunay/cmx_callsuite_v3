@@ -79,7 +79,7 @@ const APP_ORIGINATED_EXTEN_PATTERN = /^2\d+$/; // matches "2<room>", e.g. "29700
 // product decision, a supervisor's status is left completely
 // untouched while Silent Listening — no separate "Live Monitoring"
 // status was wanted, just "don't misreport this as something else."
-const SILENT_LISTEN_CALLERID_NAME = "CMX Silent Listen";
+const SILENT_LISTEN_CALLERID_NAME = "VoxSuite Silent Listen"; // must match monitoringService.js
 
 // AMI channel name -> { appUserId, priorStatus }
 // priorStatus is null if the agent had no open status row at all right

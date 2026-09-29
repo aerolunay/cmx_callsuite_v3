@@ -9,7 +9,7 @@ import { formatDurationHMS } from "../utils/format";
 AgentDashboard — the agent's whole web experience
 ==================================================
 Agents no longer dial from the browser (calls are handled only in the
-CMX CallSuite Desktop app), so after login this is the only page they
+VoxSuite desktop app), so after login this is the only page they
 see: their own stats for today (US Eastern day), time in each status,
 and their recent calls. Read-only — no dialing, no call-back actions.
 Refreshes itself every minute.
@@ -79,7 +79,7 @@ export default function AgentDashboard({ agent }) {
     <>
       <div className="card">
         <p style={{ margin: 0 }}>
-          Calls are handled in the <strong>CMX CallSuite Desktop</strong> app
+          Calls are handled in the <strong>VoxSuite</strong> desktop app
           {agent.extension ? (
             <>
               {" "}

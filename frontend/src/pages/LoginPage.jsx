@@ -4,7 +4,7 @@ import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 import { useAppVersion } from "../hooks/useAppVersion";
 import Setup2FAModal from "../modals/Setup2FAModal";
-import logo from "../assets/cmxlogo.png";
+import logo from "../assets/voxsuite-logo.png";
 
 // Steps:
 //   EMAIL   -> just the email input + "Login" button
@@ -175,10 +175,10 @@ export default function LoginPage() {
     <div className="auth-page">
       <div className="auth-card">
         <div className="logo-row">
-          <img src={logo} alt="CallMax" />
+          <img src={logo} alt="VoxSuite" />
         </div>
-        <h1>CMX Call Suite</h1>
-        <p className="subtitle">Sign in with your registered email</p>
+        <h1>Sign in</h1>
+        <p className="subtitle">Use your registered email</p>
 
         {error && <div className="error">{error}</div>}
         {info && !error && <div className="success">{info}</div>}
@@ -277,7 +277,7 @@ export default function LoginPage() {
           </form>
         )}
 
-        {appVersion && <div className="auth-version">version: {appVersion}</div>}
+        {appVersion && <div className="auth-version">VoxSuite v{appVersion} · SIP Phone Solutions</div>}
       </div>
 
       {showTotpPrompt && (

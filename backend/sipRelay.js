@@ -1,6 +1,6 @@
 "use strict";
 /*
- * CMX CallSuite — SIP tunnel relay.
+ * VoxSuite — SIP tunnel relay.
  * Desktop app <-(WebSocket over HTTPS 443, via Apache /ws/sip)-> this relay <-(UDP)-> Asterisk.
  * One WebSocket message = one SIP datagram. Call audio (RTP) does NOT go through here.
  *

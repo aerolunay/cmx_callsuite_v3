@@ -196,7 +196,7 @@ export default function AdminTrunksSection() {
                   type="text"
                   value={sipServer}
                   onChange={(e) => setSipServer(e.target.value)}
-                  placeholder="e.g. callmaxmgmt.tekpeer.com"
+                  placeholder="e.g. sip.carrier.com"
                   required
                 />
 

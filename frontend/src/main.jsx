@@ -10,7 +10,7 @@ ReactDOM.createRoot(document.getElementById("root")).render(
     <BrowserRouter>
       <AuthProvider>
         {/* No web phone / dialer socket any more: calls are handled only
-            in the CMX CallSuite Desktop app. */}
+            in the VoxSuite desktop app. */}
         <App />
       </AuthProvider>
     </BrowserRouter>

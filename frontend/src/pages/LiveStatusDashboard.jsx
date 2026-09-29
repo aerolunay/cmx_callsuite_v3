@@ -258,7 +258,7 @@ export default function LiveStatusDashboard() {
     setListenBusyId(agentRow.appUserId);
     setError("");
     try {
-      // Listen audio is delivered to the supervisor's CMX CallSuite Desktop
+      // Listen audio is delivered to the supervisor's VoxSuite desktop
       // app (the web phone was removed), so no browser microphone here.
       await api.startListen(agentRow.appUserId);
       setListeningTo({ appUserId: agentRow.appUserId, fullName: agentRow.fullName });

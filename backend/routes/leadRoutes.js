@@ -166,7 +166,7 @@ router.get("/leads/template", requireAdmin, async (req, res) => {
   const { format } = req.query;
   await sendTemplate(
     res,
-    "cmx-dialer-leads-template",
+    "voxsuite-leads-template",
     ["phone_number", "first_name", "last_name"],
     ["6468016974", "Jane", "Doe"],
     format
@@ -502,7 +502,7 @@ timestamp, no source tracking. Global and dead simple by design.
 */
 router.get("/dnc/template", requireAdmin, async (req, res) => {
   const { format } = req.query;
-  await sendTemplate(res, "cmx-dialer-dnc-template", ["phone_number"], ["6468016974"], format);
+  await sendTemplate(res, "voxsuite-dnc-template", ["phone_number"], ["6468016974"], format);
 });
 
 router.get("/dnc", requireAdmin, async (req, res) => {

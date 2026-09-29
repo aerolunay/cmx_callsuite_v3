@@ -24,7 +24,7 @@ export default function App() {
         }
       />
       {/* The web dialer and campaign selection were removed: calls are handled
-          only in the CMX CallSuite Desktop app. Old links/bookmarks land on
+          only in the VoxSuite desktop app. Old links/bookmarks land on
           the home page (the agent dashboard for agents). */}
       <Route path="/select-campaign" element={<Navigate to="/" replace />} />
       <Route path="/dialer" element={<Navigate to="/" replace />} />

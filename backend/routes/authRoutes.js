@@ -473,7 +473,7 @@ function requireAuth(req, res, next) {
 router.post("/totp/setup", requireAuth, async (req, res) => {
   try {
     const secret = authenticator.generateSecret();
-    const otpauthUrl = authenticator.keyuri(req.session.agent.email, "CMX Dialer", secret);
+    const otpauthUrl = authenticator.keyuri(req.session.agent.email, "VoxSuite", secret);
     const qrDataUrl = await QRCode.toDataURL(otpauthUrl);
 
     // Stored but not yet "enabled" — confirmed only after /totp/confirm.

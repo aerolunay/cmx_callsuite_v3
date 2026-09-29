@@ -4,7 +4,7 @@
 ==================================================
 EMAIL TEMPLATES
 ==================================================
-Branded HTML for outbound emails — CallMax navy/cyan, matching the
+Branded HTML for outbound emails — VoxSuite navy/teal, matching the
 app's own header (see BUILD_SPEC.md's pixel-sampled brand colors).
 Every function returns { subject, text, html } — text is a real
 plain-text fallback for clients that don't render HTML, not an
@@ -22,16 +22,17 @@ const FRONTEND_URL = process.env.FRONTEND_URL || "http://localhost:5173";
 function wrapEmailHtml(bodyHtml) {
   return `
 <div style="font-family: -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 480px; margin: 0 auto; background: #f4f6fa;">
-  <div style="background: #182d57; padding: 28px 24px; text-align: center;">
-    <span style="font-size: 22px; font-weight: 800; color: #ffffff; letter-spacing: 1px;">
-      CALLMAX
+  <div style="background: #0e1a2b; padding: 28px 24px; text-align: center;">
+    <span style="font-size: 24px; color: #ffffff; letter-spacing: 0.5px;">
+      <span style="font-weight: 800;">Vox</span><span style="font-weight: 400;">Suite</span>
     </span>
+    <div style="margin-top: 6px; font-size: 10px; letter-spacing: 3px; color: #9fb0cc;">SIP PHONE SOLUTIONS</div>
   </div>
-  <div style="padding: 32px 28px; background: #ffffff; color: #182d57;">
+  <div style="padding: 32px 28px; background: #ffffff; color: #0e1a2b;">
     ${bodyHtml}
   </div>
   <div style="padding: 16px 28px; text-align: center; color: #98a2b3; font-size: 12px;">
-    CallMax Solutions &middot; CMX Dialer
+    VoxSuite &middot; SIP Phone Solutions
   </div>
 </div>
   `.trim();
@@ -51,9 +52,9 @@ function buildOtpEmail({ fullName, code, expiryMinutes }) {
 
   const html = wrapEmailHtml(`
     <p style="margin: 0 0 16px; font-size: 15px;">Hi ${firstName},</p>
-    <p style="margin: 0 0 24px; font-size: 15px;">Here's your CMX Dialer login code:</p>
+    <p style="margin: 0 0 24px; font-size: 15px;">Here's your VoxSuite login code:</p>
     <div style="text-align: center; margin: 0 0 24px;">
-      <span style="display: inline-block; font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #182d57; background: #f4f6fa; border: 1px solid #d9dee6; border-radius: 8px; padding: 16px 24px;">
+      <span style="display: inline-block; font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #0e1a2b; background: #f4f6fa; border: 1px solid #d9dee6; border-radius: 8px; padding: 16px 24px;">
         ${code}
       </span>
     </div>
@@ -62,9 +63,9 @@ function buildOtpEmail({ fullName, code, expiryMinutes }) {
     </p>
   `);
 
-  const text = `Hi ${firstName},\n\nYour CMX Dialer login code is: ${code}\n\nThis code expires in ${expiryMinutes} minute${expiryMinutes === 1 ? "" : "s"}. If you didn't request this, you can safely ignore this email.`;
+  const text = `Hi ${firstName},\n\nYour VoxSuite login code is: ${code}\n\nThis code expires in ${expiryMinutes} minute${expiryMinutes === 1 ? "" : "s"}. If you didn't request this, you can safely ignore this email.`;
 
-  return { subject: "Your CMX Dialer login code", text, html };
+  return { subject: "Your VoxSuite login code", text, html };
 }
 
 /*
@@ -84,7 +85,7 @@ function buildWelcomeEmail({ fullName, email, accessLevel }) {
   const html = wrapEmailHtml(`
     <p style="margin: 0 0 16px; font-size: 15px;">Hi ${firstName},</p>
     <p style="margin: 0 0 16px; font-size: 15px;">
-      An account has been created for you on CMX Dialer as
+      An account has been created for you on VoxSuite as
       <strong>${accessLevel}</strong>.
     </p>
     <p style="margin: 0 0 24px; font-size: 15px;">
@@ -93,7 +94,7 @@ function buildWelcomeEmail({ fullName, email, accessLevel }) {
       we'll send you a code to get in.
     </p>
     <div style="text-align: center; margin: 0 0 24px;">
-      <a href="${loginUrl}" style="display: inline-block; background: #182d57; color: #ffffff; font-weight: 700; font-size: 14px; text-decoration: none; padding: 12px 28px; border-radius: 6px;">
+      <a href="${loginUrl}" style="display: inline-block; background: #0e1a2b; color: #ffffff; font-weight: 700; font-size: 14px; text-decoration: none; padding: 12px 28px; border-radius: 6px;">
         Go to Login
       </a>
     </div>
@@ -103,9 +104,9 @@ function buildWelcomeEmail({ fullName, email, accessLevel }) {
     </p>
   `);
 
-  const text = `Hi ${firstName},\n\nAn account has been created for you on CMX Dialer as ${accessLevel}.\n\nThere's no password to set up — every login is a one-time code sent to ${email}. Go to ${loginUrl}, enter your email, and we'll send you a code to get in.\n\nOnce you're in, we'd also recommend setting up an authenticator app for extra security.`;
+  const text = `Hi ${firstName},\n\nAn account has been created for you on VoxSuite as ${accessLevel}.\n\nThere's no password to set up — every login is a one-time code sent to ${email}. Go to ${loginUrl}, enter your email, and we'll send you a code to get in.\n\nOnce you're in, we'd also recommend setting up an authenticator app for extra security.`;
 
-  return { subject: "Welcome to CMX Dialer", text, html };
+  return { subject: "Welcome to VoxSuite", text, html };
 }
 
 /*
@@ -147,16 +148,16 @@ function buildVoicemailNotificationEmail({ fullName, campaignName, campaignId, c
       <div><strong>Left at:</strong> ${formattedLeftAt} (Eastern)</div>
     </div>
     <div style="text-align: center; margin: 0 0 24px;">
-      <a href="${playUrl}" style="display: inline-block; background: #182d57; color: #ffffff; font-weight: 700; font-size: 14px; text-decoration: none; padding: 12px 28px; border-radius: 6px;">
+      <a href="${playUrl}" style="display: inline-block; background: #0e1a2b; color: #ffffff; font-weight: 700; font-size: 14px; text-decoration: none; padding: 12px 28px; border-radius: 6px;">
         Listen to Voicemail
       </a>
     </div>
     <p style="margin: 0; font-size: 13px; color: #667085;">
-      You'll need to be logged in to CMX Dialer to play or download it — this link takes you straight there.
+      You'll need to be logged in to VoxSuite to play or download it — this link takes you straight there.
     </p>
   `);
 
-  const text = `Hi ${firstName},\n\nA new voicemail was left for ${campaignName || campaignId}.\n\nCaller: ${callerIdNumber || "Unknown"}\nLeft at: ${formattedLeftAt} (Eastern)\n\nListen here: ${playUrl}\n\nYou'll need to be logged in to CMX Dialer to play or download it.`;
+  const text = `Hi ${firstName},\n\nA new voicemail was left for ${campaignName || campaignId}.\n\nCaller: ${callerIdNumber || "Unknown"}\nLeft at: ${formattedLeftAt} (Eastern)\n\nListen here: ${playUrl}\n\nYou'll need to be logged in to VoxSuite to play or download it.`;
 
   return { subject: `New voicemail — ${campaignName || campaignId}`, text, html };
 }

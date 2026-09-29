@@ -549,7 +549,7 @@ function startCall({
           Context: "trunkinbound",
           Exten: phoneNumber,
           Priority: 1,
-          CallerID: `"CMX Outbound" <${campaignCid}>`,
+          CallerID: `"VoxSuite Outbound" <${campaignCid}>`,
           Async: "true",
           // Per explicit request — AMD must only run for OUTBOUND
           // campaigns dialing a real lead, never for BLENDED campaigns

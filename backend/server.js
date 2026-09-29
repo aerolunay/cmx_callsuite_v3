@@ -167,7 +167,7 @@ HEALTH CHECK
 app.get("/api/health", (req, res) => {
   return res.status(200).json({
     success: true,
-    app: "CMX Dialer API",
+    app: "VoxSuite API",
     status: "running",
     environment: process.env.NODE_ENV || "development",
   });
@@ -260,13 +260,13 @@ async function startServer() {
     ws.attach(httpServer, sessionStore);
 
     httpServer.listen(PORT, () => {
-      console.log(`CMX Dialer API running on port ${PORT}`);
+      console.log(`VoxSuite API running on port ${PORT}`);
       console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
       console.log(`Frontend URL: ${FRONTEND_URL}`);
       console.log(`WebSocket endpoint: ws://localhost:${PORT}/ws/dialer`);
     });
   } catch (error) {
-    console.error("CMX Dialer API failed to start:", {
+    console.error("VoxSuite API failed to start:", {
       code: error.code || null,
       errno: error.errno || null,
       sqlState: error.sqlState || null,

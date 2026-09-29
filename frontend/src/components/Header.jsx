@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import { useAppVersion } from "../hooks/useAppVersion";
-import logo from "../assets/cmxlogo_white.png";
+import logo from "../assets/voxsuite-logo-white.png";
 
 /*
 ==================================================
@@ -33,8 +33,8 @@ export default function Header({ agentStatus }) {
   return (
     <header className="header">
       <div className="header-logo">
-        <img src={logo} alt="CallMax" />
-        {appVersion && <div className="header-version">CMX Call Suite V{appVersion}</div>}
+        <img src={logo} alt="VoxSuite" />
+        {appVersion && <div className="header-version">VoxSuite v{appVersion}</div>}
       </div>
 
       {agent && (
@@ -44,7 +44,7 @@ export default function Header({ agentStatus }) {
             NAV MATRIX — per the finished access-level spec
             ==================================================
             Dialer      : REMOVED from the web app — calls are handled only in the
-                          CMX CallSuite Desktop app. Agents land on their own
+                          VoxSuite desktop app. Agents land on their own
                           dashboard (LandingPage.jsx).
             Live Status : supervisor, training_quality, account_manager, wfm, admin
             Reports     : supervisor, account_manager, wfm, admin (NOT training_quality)

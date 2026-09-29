@@ -1,17 +1,16 @@
 /*
-Brand colors extracted directly from the CallMax logo file (verified by
-sampling actual pixel values, not guessed): navy #182D57 (wordmark),
-cyan #00ADEE (checkmark accent). Could not reach callmaxsolutions.com to
-confirm the site's full palette beyond the logo — if there are other
-official secondary colors, adjust these variables.
+VoxSuite brand colours, shared with the desktop app: navy #0E1A2B (from
+the VoxSuite logo) and the teal accent #0D8483 (deep enough that white
+text on it passes WCAG AA). The --cmx-* variable names are internal
+only and kept so the rest of the stylesheet doesn't have to change.
 */
 :root {
-  --cmx-navy: #182d57;
-  --cmx-navy-dark: #101d3a;
-  --cmx-cyan: #00adee;
-  --cmx-cyan-dark: #0090c7;
+  --cmx-navy: #0e1a2b;
+  --cmx-navy-dark: #08111e;
+  --cmx-cyan: #0d8483;
+  --cmx-cyan-dark: #0b6b6a;
   --cmx-gray-bg: #f4f6fa;
-  --cmx-text-dark: #182d57;
+  --cmx-text-dark: #0e1a2b;
   --cmx-border: #d9dee6;
   --cmx-danger: #c0392b;
   --cmx-warning: #b8560f;
@@ -55,14 +54,9 @@ body {
   font-size: 11px;
   color: rgba(255, 255, 255, 0.55);
   white-space: nowrap;
-  /* The logo PNG itself has ~22px of transparent padding before the
-     visible "C" starts (confirmed by measuring the actual file: the
-     logo is 621x124px, visible content starts at x=64, i.e. ~10.3%
-     of its width — at this header's 42px logo height, that's ~22px).
-     Without this, the version text (flush with the image's true
-     left edge) looks misaligned against the logo's visible text
-     above it. */
-  margin-left: 22px;
+  /* The VoxSuite logo file is trimmed to its visible edge, so the
+     version line simply aligns with the image's left edge. */
+  margin-left: 0;
 }
 
 .header-right {
@@ -135,7 +129,7 @@ body {
   background: white;
   padding: 32px;
   border-radius: 8px;
-  box-shadow: 0 2px 16px rgba(24, 45, 87, 0.12);
+  box-shadow: 0 2px 16px rgba(14, 26, 43, 0.12);
   width: 360px;
 }
 
@@ -146,7 +140,7 @@ body {
 }
 
 .auth-card .logo-row img {
-  height: 32px;
+  height: 56px;
 }
 
 .auth-version {
@@ -324,7 +318,7 @@ from a clean .success and short of a hard .error.
   background: white;
   border-radius: 8px;
   padding: 20px;
-  box-shadow: 0 1px 6px rgba(24, 45, 87, 0.08);
+  box-shadow: 0 1px 6px rgba(14, 26, 43, 0.08);
   margin-bottom: 16px;
 }
 
@@ -886,7 +880,7 @@ away from the screen at that exact moment.
   z-index: 1000;
   background: white;
   border-radius: 6px;
-  box-shadow: 0 4px 20px rgba(24, 45, 87, 0.25);
+  box-shadow: 0 4px 20px rgba(14, 26, 43, 0.25);
   padding: 8px;
 }
 
@@ -1107,7 +1101,7 @@ away from the screen at that exact moment.
   background: white;
   border: 1px solid var(--cmx-border);
   border-radius: 6px;
-  box-shadow: 0 4px 20px rgba(24, 45, 87, 0.15);
+  box-shadow: 0 4px 20px rgba(14, 26, 43, 0.15);
   padding: 10px;
   min-width: 260px;
   max-height: 320px;
@@ -1150,7 +1144,7 @@ away from the screen at that exact moment.
   color: white;
   max-width: 420px;
   margin-bottom: 16px;
-  box-shadow: 0 4px 16px rgba(24, 45, 87, 0.25);
+  box-shadow: 0 4px 16px rgba(14, 26, 43, 0.25);
 }
 
 .phone-widget-status {

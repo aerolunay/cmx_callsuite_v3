@@ -120,7 +120,7 @@ function startSilentListen(room, listenerExtension, listenerAppUserId, targetApp
       // manual answer as before. Also relied on below by
       // syncListenerRoom's own re-originate (a migration is really
       // just another Silent Listen call, same auto-answer path).
-      CallerID: '"CMX Silent Listen" <9999>',
+      CallerID: '"VoxSuite Silent Listen" <9999>',
     };
 
     ami.originate(originateParams).catch(() => {
