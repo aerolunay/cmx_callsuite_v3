@@ -19,3 +19,5 @@ DESKTOP phones get `media_address = ${SERVER_IP}` and `qualify_frequency = 10`).
 
 Firewall (AWS security group) for desktop-app agents: only **TCP 443** plus
 **UDP 10000–20000** (call audio). Carrier trunks keep their own UDP 5060 rules.
+
+See [`CUTOVER.md`](CUTOVER.md) for the production switch-over checklist.
