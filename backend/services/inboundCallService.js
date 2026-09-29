@@ -997,7 +997,54 @@ function findByChannel(channel) {
   return null;
 }
 
+/*
+==================================================
+FAST RETRY WHEN THE AGENT'S PHONE CAN'T BE RUNG
+==================================================
+The agent leg is an Async Originate: the action "succeeds" immediately and
+Asterisk reports the real outcome later via OriginateResponse. A Failure
+(phone momentarily unreachable, contact marked unavailable, busy, etc.)
+arrives within a second — but nothing listened for it here, so the waiting
+caller sat until AGENT_RING_TIMEOUT_MS (30 s). Now a failed agent leg puts
+the agent back to READY and the caller back in the queue, and retries after
+AGENT_RING_FAILURE_RETRY_MS (the same agent, if still the only one Ready,
+or someone else). dialerService.js does the same for outbound calls.
+==================================================
+*/
+const AGENT_RING_FAILURE_RETRY_MS = 3000;
+
+function handleAgentLegFailure(evt) {
+  if (evt.response !== "Failure") return;
+  const exten = String(evt.exten || "");
+  if (!exten.startsWith("2")) return;
+  const call = inboundCalls.get(exten.slice(1)); // agent legs dial 2<room>
+  if (!call || call.status !== "ringing_agent") return;
+
+  const appUserId = call.pendingAppUserId;
+  console.warn(
+    `[inboundCallService] Agent leg failed to ring (reason ${evt.reason}) — back to the queue, retrying in ${AGENT_RING_FAILURE_RETRY_MS / 1000}s (callId=${call.callId}, room=${call.room}, appUserId=${appUserId})`
+  );
+  clearRingTimeout(call);
+  call.status = "waiting_for_agent";
+  call.pendingAppUserId = null;
+  call.pendingAgentExtension = null;
+  broadcastInboundStatus(call);
+
+  (async () => {
+    if (appUserId) {
+      try {
+        await agentStatusService.setStatus(appUserId, "READY", { relatedCampaignId: call.campaignId });
+      } catch (err) {
+        console.error("[inboundCallService] Failed to return agent to READY after a failed ring:", err.message);
+      }
+    }
+    setTimeout(() => tryConnectReadyAgents(), AGENT_RING_FAILURE_RETRY_MS);
+  })();
+}
+
 function registerInboundEventTracking() {
+  ami.events.on("OriginateResponse", handleAgentLegFailure);
+
   ami.events.on("ConfbridgeJoin", async (evt) => {
     const call = inboundCalls.get(evt.conference);
     if (!call) return; // not one of our rooms, or a room nobody pre-registered

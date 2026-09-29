@@ -480,7 +480,10 @@ function buildPhoneWizardBlock({ extension, login, fullname, phone_type }) {
       `type = aor`,
       `max_contacts = 1`,
       `remove_existing = yes`,
-      `qualify_frequency = 30`,
+      // Checked every 10 s (was 30): an unreachable contact is noticed — and a
+      // recovered one marked available again — within seconds, so a queued call
+      // isn't blocked for up to half a minute. Cheap: one tiny OPTIONS per phone.
+      `qualify_frequency = 10`,
       `maximum_expiration = 3600`,
       `minimum_expiration = 60`,
       `default_expiration = 120`,
