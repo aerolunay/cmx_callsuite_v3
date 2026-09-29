@@ -1,6 +1,5 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { useAppVersion } from "../hooks/useAppVersion";
 import logo from "../assets/voxsuite-logo-white.png";
 
 /*
@@ -26,7 +25,6 @@ states at all and shouldn't be blocked from logging out.
 */
 export default function Header({ agentStatus }) {
   const { agent, logout } = useAuth();
-  const appVersion = useAppVersion();
 
   const canLogout = agentStatus === undefined || agentStatus === "NOT_READY";
 
@@ -34,7 +32,6 @@ export default function Header({ agentStatus }) {
     <header className="header">
       <div className="header-logo">
         <img src={logo} alt="VoxSuite" />
-        {appVersion && <div className="header-version">VoxSuite v{appVersion}</div>}
       </div>
 
       {agent && (

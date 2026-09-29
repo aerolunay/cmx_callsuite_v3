@@ -46,17 +46,28 @@ body {
 }
 
 .header-logo img {
-  height: 42px;
+  height: 54px; /* logo only now — the version moved to the page footer (AppFooter) */
   display: block;
 }
 
-.header-version {
+/* Page layout: header, content, then the version footer pinned to the
+   bottom of the window on short pages. */
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+#root > * {
+  min-width: 0;
+}
+
+.app-footer {
+  margin-top: auto;
+  padding: 18px 12px 14px;
+  text-align: center;
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.55);
-  white-space: nowrap;
-  /* The VoxSuite logo file is trimmed to its visible edge, so the
-     version line simply aligns with the image's left edge. */
-  margin-left: 0;
+  color: #8a97ad;
 }
 
 .header-right {

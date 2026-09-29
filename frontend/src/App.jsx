@@ -9,6 +9,7 @@ import RecordingsPage from "./pages/RecordingsPage";
 import VoicemailsPage from "./pages/VoicemailsPage";
 import VoicemailPlayerPage from "./pages/VoicemailPlayerPage";
 import ProtectedRoute from "./components/ProtectedRoute";
+import AppFooter from "./components/AppFooter";
 
 export default function App() {
   return (
@@ -96,6 +97,7 @@ export default function App() {
         }
       />
     </Routes>
+      <AppFooter />
     </>
   );
 }
